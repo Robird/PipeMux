@@ -8,28 +8,24 @@ namespace PipeMux.CLI;
 /// <summary>
 /// CLI 客户端 - 连接到 Broker 并发送请求
 /// </summary>
-public sealed class BrokerClient
-{
+public sealed class BrokerClient {
     private const string DefaultPipeName = "pipemux-broker";
     private const int ConnectionTimeoutSeconds = 5;
 
     /// <summary>
     /// 发送请求到 Broker
     /// </summary>
-    public async Task<Response> SendRequestAsync(string app, string[] args)
-    {
+    public async Task<Response> SendRequestAsync(string app, string[] args) {
         // 获取终端标识符（用于多终端隔离）
         var terminalId = TerminalIdentifier.GetTerminalId();
         
-        var request = new Request
-        {
+        var request = new Request {
             App = app,
             Args = args,
             TerminalId = terminalId
         };
 
-        try
-        {
+        try {
             var pipeName = GetPipeName();
 
             // 创建 Named Pipe 客户端
@@ -42,16 +38,13 @@ public sealed class BrokerClient
 
             // 连接到 Broker（带超时）
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(ConnectionTimeoutSeconds));
-            try
-            {
+            try {
                 await pipeClient.ConnectAsync(cts.Token);
             }
-            catch (TimeoutException)
-            {
+            catch (TimeoutException) {
                 return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
             }
-            catch (OperationCanceledException)
-            {
+            catch (OperationCanceledException) {
                 return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
             }
 
@@ -64,8 +57,7 @@ public sealed class BrokerClient
             using var reader = new StreamReader(pipeClient, Encoding.UTF8, leaveOpen: true);
             var responseJson = await reader.ReadLineAsync();
 
-            if (string.IsNullOrEmpty(responseJson))
-            {
+            if (string.IsNullOrEmpty(responseJson)) {
                 return Response.Fail(request.RequestId, "Broker returned empty response");
             }
 
@@ -73,21 +65,17 @@ public sealed class BrokerClient
             var response = JsonRpc.DeserializeResponse(responseJson);
             return response ?? Response.Fail(request.RequestId, "Invalid response from broker");
         }
-        catch (TimeoutException)
-        {
+        catch (TimeoutException) {
             return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
         }
-        catch (IOException ex)
-        {
+        catch (IOException ex) {
             // Named Pipe 不存在或 Broker 未运行
-            if (ex.Message.Contains("pipe") || ex.Message.Contains("does not exist"))
-            {
+            if (ex.Message.Contains("pipe") || ex.Message.Contains("does not exist")) {
                 return Response.Fail(request.RequestId, $"Broker not running: {ex.Message}");
             }
             return Response.Fail(request.RequestId, $"Communication error: {ex.Message}");
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             return Response.Fail(request.RequestId, $"Connection error: {ex.Message}");
         }
     }
@@ -95,8 +83,7 @@ public sealed class BrokerClient
     /// <summary>
     /// 获取 Pipe 名称（支持环境变量覆盖）
     /// </summary>
-    private static string GetPipeName()
-    {
+    private static string GetPipeName() {
         return Environment.GetEnvironmentVariable("DOCUI_PIPE_NAME")
                ?? DefaultPipeName;
     }

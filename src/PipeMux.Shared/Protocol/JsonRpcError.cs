@@ -5,8 +5,7 @@ namespace PipeMux.Shared.Protocol;
 /// <summary>
 /// Standard JSON-RPC 2.0 Error
 /// </summary>
-public sealed class JsonRpcError
-{
+public sealed class JsonRpcError {
     /// <summary>
     /// Error code
     /// </summary>
@@ -36,10 +35,8 @@ public sealed class JsonRpcError
     /// <summary>
     /// Create a parse error
     /// </summary>
-    public static JsonRpcError CreateParseError(string? details = null)
-    {
-        return new JsonRpcError
-        {
+    public static JsonRpcError CreateParseError(string? details = null) {
+        return new JsonRpcError {
             Code = ParseError,
             Message = "Parse error",
             Data = details
@@ -49,10 +46,8 @@ public sealed class JsonRpcError
     /// <summary>
     /// Create an invalid request error
     /// </summary>
-    public static JsonRpcError CreateInvalidRequest(string? details = null)
-    {
-        return new JsonRpcError
-        {
+    public static JsonRpcError CreateInvalidRequest(string? details = null) {
+        return new JsonRpcError {
             Code = InvalidRequest,
             Message = "Invalid Request",
             Data = details
@@ -62,10 +57,8 @@ public sealed class JsonRpcError
     /// <summary>
     /// Create a method not found error
     /// </summary>
-    public static JsonRpcError CreateMethodNotFound(string method)
-    {
-        return new JsonRpcError
-        {
+    public static JsonRpcError CreateMethodNotFound(string method) {
+        return new JsonRpcError {
             Code = MethodNotFound,
             Message = "Method not found",
             Data = method
@@ -75,10 +68,8 @@ public sealed class JsonRpcError
     /// <summary>
     /// Create an invalid params error
     /// </summary>
-    public static JsonRpcError CreateInvalidParams(string? details = null)
-    {
-        return new JsonRpcError
-        {
+    public static JsonRpcError CreateInvalidParams(string? details = null) {
+        return new JsonRpcError {
             Code = InvalidParams,
             Message = "Invalid params",
             Data = details
@@ -88,10 +79,8 @@ public sealed class JsonRpcError
     /// <summary>
     /// Create a server error
     /// </summary>
-    public static JsonRpcError CreateServerError(string message, object? data = null)
-    {
-        return new JsonRpcError
-        {
+    public static JsonRpcError CreateServerError(string message, object? data = null) {
+        return new JsonRpcError {
             Code = ServerError,
             Message = message,
             Data = data

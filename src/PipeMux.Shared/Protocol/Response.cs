@@ -3,8 +3,7 @@ namespace PipeMux.Shared.Protocol;
 /// <summary>
 /// 统一响应格式: Backend App → Broker → CLI
 /// </summary>
-public sealed class Response
-{
+public sealed class Response {
     /// <summary>
     /// 对应的请求 ID
     /// </summary>
@@ -38,10 +37,8 @@ public sealed class Response
     /// <summary>
     /// 创建成功响应
     /// </summary>
-    public static Response Ok(string requestId, string? data = null, string? sessionId = null)
-    {
-        return new Response
-        {
+    public static Response Ok(string requestId, string? data = null, string? sessionId = null) {
+        return new Response {
             RequestId = requestId,
             Success = true,
             Data = data,
@@ -52,10 +49,8 @@ public sealed class Response
     /// <summary>
     /// 创建错误响应
     /// </summary>
-    public static Response Fail(string requestId, string error)
-    {
-        return new Response
-        {
+    public static Response Fail(string requestId, string error) {
+        return new Response {
             RequestId = requestId,
             Success = false,
             Error = error

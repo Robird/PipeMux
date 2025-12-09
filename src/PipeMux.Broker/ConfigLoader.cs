@@ -5,17 +5,14 @@ namespace PipeMux.Broker;
 /// <summary>
 /// 配置文件加载器
 /// </summary>
-public static class ConfigLoader
-{
+public static class ConfigLoader {
     /// <summary>
     /// 加载配置 (从 ~/.config/pipemux/broker.toml 或默认配置)
     /// </summary>
-    public static BrokerConfig Load()
-    {
+    public static BrokerConfig Load() {
         var configPath = GetConfigPath();
 
-        if (File.Exists(configPath))
-        {
+        if (File.Exists(configPath)) {
             var toml = File.ReadAllText(configPath);
             return Toml.ToModel<BrokerConfig>(toml);
         }
@@ -28,19 +25,15 @@ public static class ConfigLoader
         return CreateDefaultConfig();
     }
 
-    private static string GetConfigPath()
-    {
+    private static string GetConfigPath() {
         // P0 Fix: Use correct cross-platform path ~/.config/pipemux/broker.toml
         var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         return Path.Combine(homeDir, ".config", "pipemux", "broker.toml");
     }
 
-    private static BrokerConfig CreateDefaultConfig()
-    {
-        return new BrokerConfig
-        {
-            Broker = new BrokerSettings
-            {
+    private static BrokerConfig CreateDefaultConfig() {
+        return new BrokerConfig {
+            Broker = new BrokerSettings {
                 SocketPath = null // 使用默认
             },
             Apps = new Dictionary<string, AppSettings>()

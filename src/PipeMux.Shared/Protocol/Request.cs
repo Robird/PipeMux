@@ -3,8 +3,7 @@ namespace PipeMux.Shared.Protocol;
 /// <summary>
 /// 统一请求格式: CLI → Broker → Backend App
 /// </summary>
-public sealed class Request
-{
+public sealed class Request {
     /// <summary>
     /// 目标应用名称 (如 "calculator", "texteditor")
     /// </summary>

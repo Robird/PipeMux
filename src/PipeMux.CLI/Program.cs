@@ -9,21 +9,17 @@ var argsArgument = new Argument<string[]>("args", "Command and arguments (e.g., 
 rootCommand.AddArgument(appArgument);
 rootCommand.AddArgument(argsArgument);
 
-rootCommand.SetHandler(async (app, args) =>
-{
+rootCommand.SetHandler(async (app, args) => {
     var client = new BrokerClient();
     var result = await client.SendRequestAsync(app, args);
     
-    if (result.Success)
-    {
+    if (result.Success) {
         Console.WriteLine(result.Data ?? "(no output)");
-        if (result.SessionId != null)
-        {
+        if (result.SessionId != null) {
             Console.WriteLine($"\n[Session: {result.SessionId}]");
         }
     }
-    else
-    {
+    else {
         Console.Error.WriteLine($"Error: {result.Error}");
         Environment.ExitCode = 1;
     }

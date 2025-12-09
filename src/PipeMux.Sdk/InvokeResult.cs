@@ -3,8 +3,7 @@ namespace PipeMux.Sdk;
 /// <summary>
 /// 命令调用的结果
 /// </summary>
-public class InvokeResult
-{
+public class InvokeResult {
     /// <summary>
     /// 命令退出码
     /// </summary>

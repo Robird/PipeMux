@@ -5,8 +5,7 @@ namespace PipeMux.Shared.Protocol;
 /// <summary>
 /// Standard JSON-RPC 2.0 Request
 /// </summary>
-public sealed class JsonRpcRequest
-{
+public sealed class JsonRpcRequest {
     /// <summary>
     /// JSON-RPC version (always "2.0")
     /// </summary>

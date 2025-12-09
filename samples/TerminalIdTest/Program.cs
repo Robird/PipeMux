@@ -4,10 +4,8 @@ using PipeMux.Shared;
 
 namespace TerminalIdTest;
 
-class Program
-{
-    static void Main(string[] args)
-    {
+class Program {
+    static void Main(string[] args) {
         Console.WriteLine("=== Terminal Identifier Test ===");
         Console.WriteLine();
         
@@ -24,8 +22,7 @@ class Program
         Console.WriteLine();
 
         // 解析详情
-        if (terminalId != null)
-        {
+        if (terminalId != null) {
             var info = TerminalIdInfo.Parse(terminalId);
             Console.WriteLine($"  Type: {info.Type}");
             Console.WriteLine($"  Value: {info.Value}");
@@ -43,11 +40,9 @@ class Program
         PrintEnvVar("WINDOWID");
     }
 
-    static void PrintEnvVar(string name)
-    {
+    static void PrintEnvVar(string name) {
         var value = Environment.GetEnvironmentVariable(name);
-        if (!string.IsNullOrEmpty(value))
-        {
+        if (!string.IsNullOrEmpty(value)) {
             Console.WriteLine($"  {name} = {value}");
         }
     }

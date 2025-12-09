@@ -12,18 +12,15 @@ Console.Error.WriteLine("[INFO] Press Ctrl+C to stop");
 
 // 设置 Ctrl+C 处理
 var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (s, e) =>
-{
+Console.CancelKeyPress += (s, e) => {
     Console.Error.WriteLine("[INFO] Received shutdown signal...");
     e.Cancel = true;
     cts.Cancel();
 };
 
-try
-{
+try {
     await broker.StartAsync(cts.Token);
 }
-catch (OperationCanceledException)
-{
+catch (OperationCanceledException) {
     Console.Error.WriteLine("[INFO] Broker stopped gracefully");
 }

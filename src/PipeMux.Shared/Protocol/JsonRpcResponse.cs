@@ -5,8 +5,7 @@ namespace PipeMux.Shared.Protocol;
 /// <summary>
 /// Standard JSON-RPC 2.0 Response
 /// </summary>
-public sealed class JsonRpcResponse
-{
+public sealed class JsonRpcResponse {
     /// <summary>
     /// JSON-RPC version (always "2.0")
     /// </summary>
@@ -34,10 +33,8 @@ public sealed class JsonRpcResponse
     /// <summary>
     /// Create a success response
     /// </summary>
-    public static JsonRpcResponse Success(object? id, object? result)
-    {
-        return new JsonRpcResponse
-        {
+    public static JsonRpcResponse Success(object? id, object? result) {
+        return new JsonRpcResponse {
             Id = id,
             Result = result
         };
@@ -46,10 +43,8 @@ public sealed class JsonRpcResponse
     /// <summary>
     /// Create an error response
     /// </summary>
-    public static JsonRpcResponse Failure(object? id, JsonRpcError error)
-    {
-        return new JsonRpcResponse
-        {
+    public static JsonRpcResponse Failure(object? id, JsonRpcError error) {
+        return new JsonRpcResponse {
             Id = id,
             Error = error
         };

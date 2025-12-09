@@ -37,41 +37,33 @@ var relevantEnvVars = new[] {
     "ConEmuPID", "ConEmuBuild" // ConEmu
 };
 
-foreach (var varName in relevantEnvVars)
-{
+foreach (var varName in relevantEnvVars) {
     var value = Environment.GetEnvironmentVariable(varName);
-    if (!string.IsNullOrEmpty(value))
-    {
+    if (!string.IsNullOrEmpty(value)) {
         Console.WriteLine($"  {varName} = {value}");
     }
 }
 Console.WriteLine();
 
 // Unix TTY 检测
-if (!OperatingSystem.IsWindows())
-{
+if (!OperatingSystem.IsWindows()) {
     Console.WriteLine("═══ Unix TTY Detection ═══");
     
     // 方法 1: /proc/self/fd/0
-    try
-    {
+    try {
         var stdinLink = "/proc/self/fd/0";
-        if (File.Exists(stdinLink) || Directory.Exists(Path.GetDirectoryName(stdinLink)))
-        {
+        if (File.Exists(stdinLink) || Directory.Exists(Path.GetDirectoryName(stdinLink))) {
             var target = File.ResolveLinkTarget(stdinLink, true);
             Console.WriteLine($"  /proc/self/fd/0 → {target?.FullName ?? "(null)"}");
         }
     }
-    catch (Exception ex)
-    {
+    catch (Exception ex) {
         Console.WriteLine($"  /proc/self/fd/0 → Error: {ex.Message}");
     }
 
     // 方法 2: tty 命令
-    try
-    {
-        var psi = new ProcessStartInfo
-        {
+    try {
+        var psi = new ProcessStartInfo {
             FileName = "tty",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -79,29 +71,25 @@ if (!OperatingSystem.IsWindows())
             CreateNoWindow = true
         };
         using var process = Process.Start(psi);
-        if (process != null)
-        {
+        if (process != null) {
             var output = process.StandardOutput.ReadToEnd().Trim();
             process.WaitForExit();
             Console.WriteLine($"  tty command → {output} (exit: {process.ExitCode})");
         }
     }
-    catch (Exception ex)
-    {
+    catch (Exception ex) {
         Console.WriteLine($"  tty command → Error: {ex.Message}");
     }
 
     // 方法 3: getsid
-    try
-    {
+    try {
         [DllImport("libc", EntryPoint = "getsid")]
         static extern int getsid(int pid);
         
         var sid = getsid(0);
         Console.WriteLine($"  getsid(0) → {sid}");
     }
-    catch (Exception ex)
-    {
+    catch (Exception ex) {
         Console.WriteLine($"  getsid(0) → Error: {ex.Message}");
     }
     
@@ -109,53 +97,45 @@ if (!OperatingSystem.IsWindows())
 }
 
 // Windows 控制台检测
-if (OperatingSystem.IsWindows())
-{
+if (OperatingSystem.IsWindows()) {
     Console.WriteLine("═══ Windows Console Detection ═══");
     
     // 方法 1: GetConsoleWindow
-    try
-    {
+    try {
         [DllImport("kernel32.dll")]
         static extern IntPtr GetConsoleWindow();
         
         var hwnd = GetConsoleWindow();
         Console.WriteLine($"  GetConsoleWindow() → 0x{hwnd.ToInt64():X} ({(hwnd == IntPtr.Zero ? "NULL - possibly Windows Terminal!" : "valid")})");
     }
-    catch (Exception ex)
-    {
+    catch (Exception ex) {
         Console.WriteLine($"  GetConsoleWindow() → Error: {ex.Message}");
     }
 
     // 方法 2: 追溯父进程
-    try
-    {
+    try {
         Console.WriteLine("  Parent process chain:");
         var current = Process.GetCurrentProcess();
         int depth = 0;
         var visited = new HashSet<int>();
         
-        while (current != null && depth < 10 && !visited.Contains(current.Id))
-        {
+        while (current != null && depth < 10 && !visited.Contains(current.Id)) {
             visited.Add(current.Id);
             var indent = new string(' ', depth * 2 + 4);
             Console.WriteLine($"{indent}[{current.Id}] {current.ProcessName}");
             
-            try
-            {
+            try {
                 var parentId = GetParentProcessId(current.Id);
                 if (parentId <= 0) break;
                 current = Process.GetProcessById(parentId);
                 depth++;
             }
-            catch
-            {
+            catch {
                 break;
             }
         }
     }
-    catch (Exception ex)
-    {
+    catch (Exception ex) {
         Console.WriteLine($"  Parent chain → Error: {ex.Message}");
     }
     
@@ -177,19 +157,15 @@ Console.WriteLine();
 
 // ============ Helper Functions ============
 
-static string? GetTerminalId()
-{
-    if (OperatingSystem.IsWindows())
-    {
+static string? GetTerminalId() {
+    if (OperatingSystem.IsWindows()) {
         var winId = GetWindowsTerminalId();
         if (!string.IsNullOrEmpty(winId))
             return winId;
     }
-    else
-    {
+    else {
         // Linux/macOS: 读取 TTY
-        try
-        {
+        try {
             var target = File.ResolveLinkTarget("/proc/self/fd/0", true);
             if (target != null && (target.FullName.StartsWith("/dev/pts/") || target.FullName.StartsWith("/dev/tty")))
                 return $"tty:{target.FullName}";
@@ -197,8 +173,7 @@ static string? GetTerminalId()
         catch { }
 
         // Session ID fallback
-        try
-        {
+        try {
             [DllImport("libc", EntryPoint = "getsid")]
             static extern int getsid(int pid);
             
@@ -212,16 +187,14 @@ static string? GetTerminalId()
     return null;
 }
 
-static string? GetWindowsTerminalId()
-{
+static string? GetWindowsTerminalId() {
     // Windows Terminal (WT) provides a stable session token
     var wtSession = Environment.GetEnvironmentVariable("WT_SESSION");
     if (!string.IsNullOrEmpty(wtSession))
         return $"wt:{wtSession}";
 
     // VS Code 内置终端的专用环境变量
-    if (Environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode")
-    {
+    if (Environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode") {
         var vscodeId = Environment.GetEnvironmentVariable("VSCODE_TERMINAL_ID");
         if (!string.IsNullOrEmpty(vscodeId))
             return $"vscode:{vscodeId}";
@@ -238,8 +211,7 @@ static string? GetWindowsTerminalId()
         return $"host:{host.ProcessName}:{host.Id}";
 
     // 最后兜底使用窗口句柄（仅在传统控制台稳定）
-    try
-    {
+    try {
         [DllImport("kernel32.dll")]
         static extern IntPtr GetConsoleWindow();
 
@@ -252,31 +224,25 @@ static string? GetWindowsTerminalId()
     return null;
 }
 
-static Process? FindTerminalHostProcess()
-{
-    try
-    {
+static Process? FindTerminalHostProcess() {
+    try {
         var current = Process.GetCurrentProcess();
         var visited = new HashSet<int>();
 
-        while (current != null && visited.Add(current.Id) && visited.Count < 20)
-        {
+        while (current != null && visited.Add(current.Id) && visited.Count < 20) {
             var name = current.ProcessName.ToLowerInvariant();
 
-            if (IsTerminalHostName(name))
-            {
+            if (IsTerminalHostName(name)) {
                 return current;
             }
 
             var parentId = GetParentProcessId(current.Id);
             if (parentId <= 0) break;
 
-            try
-            {
+            try {
                 current = Process.GetProcessById(parentId);
             }
-            catch
-            {
+            catch {
                 break;
             }
         }
@@ -286,8 +252,7 @@ static Process? FindTerminalHostProcess()
     return null;
 }
 
-static bool IsTerminalHostName(string name)
-{
+static bool IsTerminalHostName(string name) {
     // 常见终端/宿主进程名称，统一用小写比较
     return name is "windowsterminal" or "conhost" or "openconsole"
         or "wsl" or "wt" or "wezterm" or "alacritty" or "mintty"
@@ -297,8 +262,7 @@ static bool IsTerminalHostName(string name)
         or "code" or "code - insiders";
 }
 
-static string? GetAnyStdHandleFileId()
-{
+static string? GetAnyStdHandleFileId() {
     const int STD_INPUT_HANDLE = -10;
     const int STD_OUTPUT_HANDLE = -11;
     const int STD_ERROR_HANDLE = -12;
@@ -310,14 +274,12 @@ static string? GetAnyStdHandleFileId()
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern bool GetFileInformationByHandleEx(IntPtr hFile, int fileInfoClass, out FILE_ID_INFO fileInformation, int dwBufferSize);
 
-    static string? TryHandle(int kind)
-    {
+    static string? TryHandle(int kind) {
         var handle = GetStdHandle(kind);
         if (handle == IntPtr.Zero || handle == new IntPtr(-1))
             return null;
 
-        if (GetFileInformationByHandleEx(handle, FileIdInfo, out var info, Marshal.SizeOf<FILE_ID_INFO>()))
-        {
+        if (GetFileInformationByHandleEx(handle, FileIdInfo, out var info, Marshal.SizeOf<FILE_ID_INFO>())) {
             return $"{info.VolumeSerialNumber:X}-{info.FileId.HighPart:X}-{info.FileId.LowPart:X}";
         }
 
@@ -329,22 +291,18 @@ static string? GetAnyStdHandleFileId()
         ?? TryHandle(STD_ERROR_HANDLE);
 }
 
-static int FindShellProcess()
-{
-    try
-    {
+static int FindShellProcess() {
+    try {
         var current = Process.GetCurrentProcess();
         var visited = new HashSet<int>();
         
-        while (current != null && !visited.Contains(current.Id))
-        {
+        while (current != null && !visited.Contains(current.Id)) {
             visited.Add(current.Id);
             var name = current.ProcessName.ToLowerInvariant();
             
             // 找到 shell 或终端宿主进程
             if (name is "cmd" or "powershell" or "pwsh" or "bash" or "zsh" or "fish" 
-                or "conhost" or "windowsterminal")
-            {
+                or "conhost" or "windowsterminal") {
                 return current.Id;
             }
 
@@ -357,12 +315,9 @@ static int FindShellProcess()
     return -1;
 }
 
-static int GetParentProcessId(int processId)
-{
-    if (OperatingSystem.IsWindows())
-    {
-        try
-        {
+static int GetParentProcessId(int processId) {
+    if (OperatingSystem.IsWindows()) {
+        try {
             [DllImport("kernel32.dll")]
             static extern IntPtr OpenProcess(int access, bool inherit, int pid);
             
@@ -376,28 +331,23 @@ static int GetParentProcessId(int processId)
             var handle = OpenProcess(0x0400, false, processId);
             if (handle == IntPtr.Zero) return -1;
             
-            try
-            {
+            try {
                 var pbi = new PROCESS_BASIC_INFORMATION();
                 var status = NtQueryInformationProcess(handle, 0, ref pbi, 
                     Marshal.SizeOf<PROCESS_BASIC_INFORMATION>(), out _);
                 if (status == 0)
                     return pbi.InheritedFromUniqueProcessId.ToInt32();
             }
-            finally
-            {
+            finally {
                 CloseHandle(handle);
             }
         }
         catch { }
     }
-    else
-    {
-        try
-        {
+    else {
+        try {
             var statPath = $"/proc/{processId}/stat";
-            if (File.Exists(statPath))
-            {
+            if (File.Exists(statPath)) {
                 var content = File.ReadAllText(statPath);
                 var parts = content.Split(' ');
                 if (parts.Length > 3 && int.TryParse(parts[3], out var ppid))
@@ -410,8 +360,7 @@ static int GetParentProcessId(int processId)
 }
 
 [StructLayout(LayoutKind.Sequential)]
-struct PROCESS_BASIC_INFORMATION
-{
+struct PROCESS_BASIC_INFORMATION {
     public IntPtr Reserved1;
     public IntPtr PebBaseAddress;
     public IntPtr Reserved2_0;
@@ -421,15 +370,13 @@ struct PROCESS_BASIC_INFORMATION
 }
 
 [StructLayout(LayoutKind.Sequential)]
-struct FILE_ID_INFO
-{
+struct FILE_ID_INFO {
     public ulong VolumeSerialNumber;
     public FILE_ID_128 FileId;
 }
 
 [StructLayout(LayoutKind.Sequential)]
-struct FILE_ID_128
-{
+struct FILE_ID_128 {
     public ulong LowPart;
     public ulong HighPart;
 }

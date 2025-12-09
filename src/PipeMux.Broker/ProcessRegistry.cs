@@ -7,20 +7,16 @@ namespace PipeMux.Broker;
 /// <summary>
 /// 管理后台应用进程的注册表
 /// </summary>
-public sealed class ProcessRegistry
-{
+public sealed class ProcessRegistry {
     private readonly Dictionary<string, AppProcess> _processes = new();
     private readonly object _lock = new();
 
     /// <summary>
     /// 启动应用进程
     /// </summary>
-    public AppProcess Start(string appName, string command)
-    {
-        lock (_lock)
-        {
-            if (_processes.TryGetValue(appName, out var existing) && !existing.HasExited)
-            {
+    public AppProcess Start(string appName, string command) {
+        lock (_lock) {
+            if (_processes.TryGetValue(appName, out var existing) && !existing.HasExited) {
                 return existing;
             }
 
@@ -34,14 +30,10 @@ public sealed class ProcessRegistry
     /// <summary>
     /// 获取应用进程 (如果不存在或已退出则返回 null)
     /// </summary>
-    public AppProcess? Get(string appName)
-    {
-        lock (_lock)
-        {
-            if (_processes.TryGetValue(appName, out var process))
-            {
-                if (process.HasExited)
-                {
+    public AppProcess? Get(string appName) {
+        lock (_lock) {
+            if (_processes.TryGetValue(appName, out var process)) {
+                if (process.HasExited) {
                     // 进程已退出，从注册表移除并清理
                     _processes.Remove(appName);
                     process.Dispose();
@@ -56,12 +48,9 @@ public sealed class ProcessRegistry
     /// <summary>
     /// 关闭应用进程
     /// </summary>
-    public bool Close(string appName)
-    {
-        lock (_lock)
-        {
-            if (_processes.Remove(appName, out var process))
-            {
+    public bool Close(string appName) {
+        lock (_lock) {
+            if (_processes.Remove(appName, out var process)) {
                 process.Dispose();
                 return true;
             }
@@ -72,10 +61,8 @@ public sealed class ProcessRegistry
     /// <summary>
     /// 列出所有活跃进程
     /// </summary>
-    public IReadOnlyList<string> ListActive()
-    {
-        lock (_lock)
-        {
+    public IReadOnlyList<string> ListActive() {
+        lock (_lock) {
             return _processes
                 .Where(kv => !kv.Value.HasExited)
                 .Select(kv => kv.Key)
@@ -87,8 +74,7 @@ public sealed class ProcessRegistry
 /// <summary>
 /// 后台应用进程的封装 - 使用 StreamJsonRpc 进行通信
 /// </summary>
-public sealed class AppProcess : IDisposable
-{
+public sealed class AppProcess : IDisposable {
     private readonly Process _process;
     private readonly JsonRpc _rpc;
     private volatile bool _isHealthy = true;
@@ -97,8 +83,7 @@ public sealed class AppProcess : IDisposable
     public bool HasExited => _process.HasExited;
     public int ProcessId => _process.Id;
 
-    public AppProcess(string appName, string command)
-    {
+    public AppProcess(string appName, string command) {
         AppName = appName;
 
         // 解析命令 (简单实现，不处理引号)
@@ -106,10 +91,8 @@ public sealed class AppProcess : IDisposable
         var fileName = parts[0];
         var arguments = string.Join(' ', parts.Skip(1));
 
-        _process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
+        _process = new Process {
+            StartInfo = new ProcessStartInfo {
                 FileName = fileName,
                 Arguments = arguments,
                 UseShellExecute = false,
@@ -124,31 +107,24 @@ public sealed class AppProcess : IDisposable
         _rpc = null!;
     }
 
-    public void Start()
-    {
+    public void Start() {
         _process.Start();
         Console.Error.WriteLine($"[INFO] Process started: {AppName}, PID: {_process.Id}");
         
         // 消费 StandardError 防止死锁
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                while (!_process.HasExited)
-                {
+        _ = Task.Run(async () => {
+            try {
+                while (!_process.HasExited) {
                     var line = await _process.StandardError.ReadLineAsync();
-                    if (line != null)
-                    {
+                    if (line != null) {
                         Console.Error.WriteLine($"[{AppName}] {line}");
                     }
-                    else
-                    {
+                    else {
                         break; // EOF
                     }
                 }
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 Console.Error.WriteLine($"[WARN] Error reading stderr from {AppName}: {ex.Message}");
             }
         });
@@ -175,28 +151,23 @@ public sealed class AppProcess : IDisposable
     /// <summary>
     /// 调用远程方法并返回结果
     /// </summary>
-    public async Task<object?> InvokeAsync(string method, object?[] args, TimeSpan timeout, CancellationToken ct = default)
-    {
-        if (!IsHealthy())
-        {
+    public async Task<object?> InvokeAsync(string method, object?[] args, TimeSpan timeout, CancellationToken ct = default) {
+        if (!IsHealthy()) {
             throw new InvalidOperationException($"Process {AppName} is not healthy");
         }
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout);
 
-        try
-        {
+        try {
             // StreamJsonRpc 会自动处理 JSON-RPC 协议
             return await _rpc.InvokeWithCancellationAsync<object?>(method, args, cts.Token);
         }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested && !ct.IsCancellationRequested)
-        {
+        catch (OperationCanceledException) when (cts.IsCancellationRequested && !ct.IsCancellationRequested) {
             _isHealthy = false;
             throw new TimeoutException($"Request to {AppName}.{method} timed out after {timeout.TotalSeconds}s");
         }
-        catch (Exception ex) when (ex is StreamJsonRpc.ConnectionLostException or IOException)
-        {
+        catch (Exception ex) when (ex is StreamJsonRpc.ConnectionLostException or IOException) {
             _isHealthy = false;
             throw;
         }
@@ -205,19 +176,16 @@ public sealed class AppProcess : IDisposable
     /// <summary>
     /// 检查进程是否健康
     /// </summary>
-    public bool IsHealthy()
-    {
+    public bool IsHealthy() {
         if (!_isHealthy)
             return false;
         
-        if (_process.HasExited)
-        {
+        if (_process.HasExited) {
             _isHealthy = false;
             return false;
         }
         
-        if (_rpc?.IsDisposed == true)
-        {
+        if (_rpc?.IsDisposed == true) {
             _isHealthy = false;
             return false;
         }
@@ -225,12 +193,10 @@ public sealed class AppProcess : IDisposable
         return true;
     }
 
-    public void Dispose()
-    {
+    public void Dispose() {
         _rpc?.Dispose();
         
-        if (!_process.HasExited)
-        {
+        if (!_process.HasExited) {
             Console.Error.WriteLine($"[INFO] Killing process: {AppName}, PID: {_process.Id}");
             _process.Kill(entireProcessTree: true);
         }
