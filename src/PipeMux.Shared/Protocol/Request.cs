@@ -6,8 +6,9 @@ namespace PipeMux.Shared.Protocol;
 public sealed class Request {
     /// <summary>
     /// 目标应用名称 (如 "calculator", "texteditor")
+    /// 对于管理命令，此字段为 null 或空
     /// </summary>
-    public required string App { get; init; }
+    public string? App { get; init; }
 
     /// <summary>
     /// 原始命令行参数（完整传递给后端，由后端的 System.CommandLine 解析）
@@ -30,4 +31,14 @@ public sealed class Request {
     /// 请求 ID (用于追踪和调试)
     /// </summary>
     public string RequestId { get; init; } = Guid.NewGuid().ToString();
+
+    /// <summary>
+    /// 管理命令（当请求为管理命令时设置）
+    /// </summary>
+    public ManagementCommand? ManagementCommand { get; init; }
+
+    /// <summary>
+    /// 判断此请求是否为管理命令
+    /// </summary>
+    public bool IsManagementRequest => ManagementCommand != null;
 }

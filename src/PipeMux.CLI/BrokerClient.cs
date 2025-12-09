@@ -25,6 +25,25 @@ public sealed class BrokerClient {
             TerminalId = terminalId
         };
 
+        return await SendRequestCoreAsync(request);
+    }
+
+    /// <summary>
+    /// 发送管理命令到 Broker
+    /// </summary>
+    public async Task<Response> SendManagementCommandAsync(ManagementCommand command) {
+        var request = new Request {
+            App = null,
+            ManagementCommand = command
+        };
+
+        return await SendRequestCoreAsync(request);
+    }
+
+    /// <summary>
+    /// 核心请求发送逻辑
+    /// </summary>
+    private async Task<Response> SendRequestCoreAsync(Request request) {
         try {
             var pipeName = GetPipeName();
 

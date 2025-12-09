@@ -74,6 +74,40 @@ dotnet run --project src/PipeMux.CLI -c Release -- calculator add
 # Output: Stack: [30]
 ```
 
+### 4. 管理命令
+
+PipeMux CLI 支持以 `:` 前缀的管理命令，用于查看和管理 Broker 状态：
+
+```bash
+# 列出所有已注册的 App（从配置文件加载）
+dotnet run --project src/PipeMux.CLI -c Release -- :list
+# Output: calculator, myapp, ...
+
+# 列出当前运行中的进程实例
+dotnet run --project src/PipeMux.CLI -c Release -- :ps
+# Output: calculator:tty:/dev/pts/0 (PID: 12345), ...
+
+# 停止指定 App 的所有实例
+dotnet run --project src/PipeMux.CLI -c Release -- :stop calculator
+# Output: Stopped 2 instance(s) of calculator
+
+# 显示帮助信息
+dotnet run --project src/PipeMux.CLI -c Release -- :help
+```
+
+**使用别名简化命令**（推荐）：
+
+```bash
+# 在 ~/.bashrc 或 ~/.zshrc 中添加
+alias pmux='dotnet run --project /path/to/PipeMux/src/PipeMux.CLI -c Release --'
+
+# 然后可以简化为
+pmux calculator push 10
+pmux :list
+pmux :ps
+pmux :stop calculator
+```
+
 ## 开发自己的 PipeMux App
 
 ### 使用 PipeMux.Sdk

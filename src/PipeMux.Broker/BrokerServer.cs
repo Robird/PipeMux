@@ -11,6 +11,7 @@ namespace PipeMux.Broker;
 public sealed class BrokerServer {
     private readonly BrokerConfig _config;
     private readonly ProcessRegistry _registry;
+    private readonly ManagementHandler _managementHandler;
     private CancellationTokenSource? _cts;
     private readonly List<Task> _clientTasks = new(); // P0 Fix: Track background tasks
     private readonly object _taskLock = new();
@@ -18,6 +19,7 @@ public sealed class BrokerServer {
     public BrokerServer(BrokerConfig config, ProcessRegistry registry) {
         _config = config;
         _registry = registry;
+        _managementHandler = new ManagementHandler(config, registry);
     }
 
     /// <summary>
@@ -144,8 +146,16 @@ public sealed class BrokerServer {
 
             Console.Error.WriteLine($"[INFO] Processing request: {request.App} {string.Join(" ", request.Args)}");
 
-            // 调用现有的 HandleRequestAsync 处理业务逻辑
-            var response = await HandleRequestAsync(request);
+            // 检查是否为管理命令
+            Response response;
+            if (request.IsManagementRequest) {
+                Console.Error.WriteLine($"[INFO] Handling management command: {request.ManagementCommand!.Kind}");
+                response = await _managementHandler.HandleAsync(request);
+            }
+            else {
+                // 调用现有的 HandleRequestAsync 处理业务逻辑
+                response = await HandleRequestAsync(request);
+            }
 
             // 返回响应（JSON）
             var responseJson = PipeMux.Shared.Protocol.JsonRpc.SerializeResponse(response);
@@ -174,6 +184,11 @@ public sealed class BrokerServer {
     /// 处理单个请求
     /// </summary>
     private async Task<Response> HandleRequestAsync(Request request) {
+        // 检查应用名是否有效
+        if (string.IsNullOrEmpty(request.App)) {
+            return Response.Fail(request.RequestId, "App name is required");
+        }
+
         // 检查应用是否注册
         if (!_config.Apps.TryGetValue(request.App, out var appSettings)) {
             return Response.Fail(request.RequestId, $"Unknown app: {request.App}");
