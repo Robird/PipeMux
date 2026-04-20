@@ -11,7 +11,7 @@ public static class ConfigLoader {
     /// 加载配置 (从 ~/.config/pipemux/broker.toml 或默认配置)
     /// </summary>
     public static BrokerConfig Load() {
-        var configPath = GetConfigPath();
+        var configPath = BrokerConnectionDefaults.GetConfigPath();
 
         if (File.Exists(configPath)) {
             var toml = File.ReadAllText(configPath);
@@ -24,12 +24,6 @@ public static class ConfigLoader {
         
         // 返回默认配置
         return CreateDefaultConfig();
-    }
-
-    private static string GetConfigPath() {
-        // P0 Fix: Use correct cross-platform path ~/.config/pipemux/broker.toml
-        var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Path.Combine(homeDir, ".config", "pipemux", "broker.toml");
     }
 
     private static BrokerConfig CreateDefaultConfig() {

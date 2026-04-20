@@ -1,50 +1,36 @@
-# PipeMux Broker & CLI
+# PipeMux Broker
 
-为 LLM Agent 设计的有状态、交互式编辑器系统。
+`PipeMux.Broker` 是当前系统的中转层，负责：
 
-## 愿景
+- 读取 `broker.toml`
+- 按 app 名称查找并拉起后台进程
+- 通过 Unix Domain Socket 或 Named Pipe 接收 CLI 请求
+- 通过 StreamJsonRpc 调用后台应用的 `invoke` 方法
+- 按终端标识隔离同一 app 的不同进程实例
 
-从"CLI 时代"到"PipeMux 时代"的转变：
+## 当前结构
 
-- **输入**: CLI / Tool Calling (LLM Agent 普遍擅长)
-- **输出**: Markdown (直接注入 LLM 上下文)
-- **状态**: 持久化进程 (光标、选区、undo 栈)
-- **目标**: 实况信息单份显示，避免 `read_file` 历史堆积
-
-## 项目结构
-
-```
+```text
 src/
-├── PipeMux.Shared/       # 共享协议 (Request/Response/JsonRpc)
-├── PipeMux.Broker/       # 中转服务器 (进程管理 + 路由)
-├── PipeMux.CLI/          # 统一 CLI 前端
-└── PipeMux.TextEditor/   # 文本编辑器后台应用 (基于 PieceTreeSharp)
+├── PipeMux.Shared/   # 共享协议、路径/端点解析、终端标识
+├── PipeMux.Broker/   # Broker 服务本体
+├── PipeMux.CLI/      # 前端命令入口
+├── PipeMux.Sdk/      # App SDK
+└── PipeMux.Host/     # 动态加载 DLL 入口的通用宿主
 ```
 
 ## 当前状态
 
-⚠️ **这是初始骨架实现** (2025-12-06)
+当前实现已经具备：
 
-✅ **已完成**:
-- 项目结构和依赖关系
-- 协议定义 (Request/Response)
-- 基础 Markdown 渲染 (行号 + 光标)
-- 配置文件加载 (TOML)
+- Broker/CLI 端到端通信
+- Unix socket 与 named pipe 双传输
+- 后台进程复用、超时与健康检查
+- 管理命令 `:list` `:ps` `:stop` `:help`
+- `PipeMux.Host` 动态加载 DLL 中的 `RootCommand` 入口
 
-🚧 **待实现**:
-- Named Pipe / Unix Socket 通信
-- JSON-RPC 完整循环
-- Edit 命令族 (insert/delete/replace)
-- Undo/Redo + 装饰系统集成
+## 相关文档
 
-## 快速开始
-
-参考 [`docs/pipemux-quickstart.md`](../../docs/pipemux-quickstart.md)
-
-## 架构设计
-
-参考 [`docs/plans/pipemux-broker-architecture.md`](../../docs/plans/pipemux-broker-architecture.md)
-
-## 最终目标
-
-集成到自研 Agent 环境，通过 **tool calling** 替代 CLI，实现真正的 LLM-Native 编辑器。
+- 快速开始: [`../../docs/pipemux-quickstart.md`](../../docs/pipemux-quickstart.md)
+- Ubuntu 部署: [`../../docs/ubuntu-deployment.md`](../../docs/ubuntu-deployment.md)
+- 架构说明: [`../../docs/pipemux-broker-architecture.md`](../../docs/pipemux-broker-architecture.md)

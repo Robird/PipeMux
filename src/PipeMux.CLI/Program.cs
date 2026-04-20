@@ -41,9 +41,6 @@ rootCommand.SetHandler(async (app, args) => {
     
     if (result.Success) {
         Console.WriteLine(result.Data ?? "(no output)");
-        if (result.SessionId != null) {
-            Console.WriteLine($"\n[Session: {result.SessionId}]");
-        }
     }
     else {
         Console.Error.WriteLine($"Error: {result.Error}");

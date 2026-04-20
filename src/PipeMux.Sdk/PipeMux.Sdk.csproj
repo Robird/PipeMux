@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\PipeMux.Shared\PipeMux.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="StreamJsonRpc" Version="2.22.23" />
     <PackageReference Include="Nerdbank.Streams" Version="2.13.16" />
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta5.25306.1" />

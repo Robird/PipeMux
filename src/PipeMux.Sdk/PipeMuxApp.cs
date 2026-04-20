@@ -1,6 +1,7 @@
 using System.CommandLine;
 using Nerdbank.Streams;
 using StreamJsonRpc;
+using InvokeResult = PipeMux.Shared.Protocol.InvokeResult;
 
 namespace PipeMux.Sdk;
 
@@ -110,7 +111,7 @@ public class PipeMuxApp {
     /// <summary>
     /// JSON-RPC 目标类，暴露 invoke 方法
     /// </summary>
-    private class RpcTarget {
+    private sealed class RpcTarget {
         private readonly PipeMuxApp _app;
 
         public RpcTarget(PipeMuxApp app) {

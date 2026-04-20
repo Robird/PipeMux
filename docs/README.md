@@ -145,7 +145,8 @@ var rootCommand = new RootCommand("My Counter App")
 };
 
 // 3. 启动 PipeMux App
-await PipeMuxApp.RunAsync(rootCommand, args);
+var app = new PipeMuxApp("my-counter");
+await app.RunAsync(rootCommand);
 ```
 
 ### 关键点
@@ -177,7 +178,7 @@ PipeMux 自动检测终端标识符，实现多终端隔离：
 | VS Code 终端 | `VSCODE_IPC_HOOK_CLI` | `vscode-window:{uuid}` |
 | Windows Terminal | `WT_SESSION` | `wt:{guid}` |
 | 传统 Windows | `GetConsoleWindow()` | `hwnd:{hwnd}` |
-| Linux/macOS | `/proc/self/fd/0` | `tty:/dev/pts/N` |
+| Linux/macOS | `/proc/self/fd/0` / session id fallback | `tty:/dev/pts/N` |
 
 **手动覆盖**：设置 `PIPEMUX_TERMINAL_ID` 环境变量可覆盖自动检测。
 

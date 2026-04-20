@@ -1,7 +1,7 @@
 using System.IO.Pipes;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Text;
+using PipeMux.Shared;
 using PipeMux.Shared.Protocol;
 using StreamJsonRpc;
 
@@ -42,15 +42,18 @@ public sealed class BrokerServer {
         }
 
         try {
-            if (UseUnixSocketTransport()) {
-                var socketPath = _config.GetSocketPath();
-                Console.Error.WriteLine($"[INFO] Broker started, listening on unix socket: {socketPath}");
-                await RunUnixSocketServerAsync(socketPath, _cts.Token);
-            }
-            else {
-                var pipeName = _config.GetPipeName();
-                Console.Error.WriteLine($"[INFO] Broker started, listening on pipe: {pipeName}");
-                await RunNamedPipeServerAsync(pipeName, _cts.Token);
+            var endpoint = BrokerConnectionResolver.ResolveServerEndpoint(_config.Broker);
+            switch (endpoint.Transport) {
+                case BrokerTransportKind.UnixSocket:
+                    Console.Error.WriteLine($"[INFO] Broker started, listening on unix socket: {endpoint.Value}");
+                    await RunUnixSocketServerAsync(endpoint.Value, _cts.Token);
+                    break;
+                case BrokerTransportKind.NamedPipe:
+                    Console.Error.WriteLine($"[INFO] Broker started, listening on pipe: {endpoint.Value}");
+                    await RunNamedPipeServerAsync(endpoint.Value, _cts.Token);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unsupported broker transport: {endpoint.Transport}");
             }
         }
         catch (OperationCanceledException) {
@@ -226,25 +229,6 @@ public sealed class BrokerServer {
         }
     }
 
-    /// <summary>
-    /// 选择是否使用 Unix Domain Socket
-    /// </summary>
-    private bool UseUnixSocketTransport() {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
-            return false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(_config.Broker.SocketPath)) {
-            return true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(_config.Broker.PipeName)) {
-            return false;
-        }
-
-        return true;
-    }
-
     private static void CleanupUnixSocket(string socketPath) {
         try {
             if (File.Exists(socketPath)) {
@@ -303,35 +287,16 @@ public sealed class BrokerServer {
         try {
             var timeout = TimeSpan.FromSeconds(appSettings.Timeout);
             
-            // 调用后端的 invoke 方法，传递 args 数组
-            // InvokeResult 包含 { ExitCode, Output, Error }
-            var result = await process.InvokeAsync("invoke", new object?[] { request.Args }, timeout);
-            
-            // 解析 InvokeResult
-            if (result is System.Text.Json.JsonElement jsonElement) {
-                // Note: 属性名可能是 PascalCase（ExitCode）或 camelCase（exitCode），取决于 formatter 配置
-                var exitCode = jsonElement.TryGetProperty("ExitCode", out var ec) ? ec.GetInt32() 
-                             : jsonElement.TryGetProperty("exitCode", out ec) ? ec.GetInt32() : 0;
-                var output = jsonElement.TryGetProperty("Output", out var ov) ? ov.GetString() ?? ""
-                           : jsonElement.TryGetProperty("output", out ov) ? ov.GetString() ?? "" : "";
-                var error = jsonElement.TryGetProperty("Error", out var ev) ? ev.GetString() ?? ""
-                          : jsonElement.TryGetProperty("error", out ev) ? ev.GetString() ?? "" : "";
-                
-                // 去除尾部换行
-                output = output.TrimEnd('\n', '\r');
-                error = error.TrimEnd('\n', '\r');
-                
-                if (exitCode != 0 || !string.IsNullOrEmpty(error)) {
-                    // 命令执行失败
-                    var errorMsg = !string.IsNullOrEmpty(error) ? error : $"Command failed with exit code {exitCode}";
-                    return Response.Fail(request.RequestId, errorMsg);
-                }
-                
-                return Response.Ok(request.RequestId, output);
+            var result = await process.InvokeAsync<InvokeResult>("invoke", new object?[] { request.Args }, timeout);
+            var output = result.Output.TrimEnd('\n', '\r');
+            var error = result.Error.TrimEnd('\n', '\r');
+
+            if (result.ExitCode != 0 || !string.IsNullOrEmpty(error)) {
+                var errorMsg = !string.IsNullOrEmpty(error) ? error : $"Command failed with exit code {result.ExitCode}";
+                return Response.Fail(request.RequestId, errorMsg);
             }
-            
-            // 兼容旧格式或其他返回类型
-            return Response.Ok(request.RequestId, result?.ToString());
+
+            return Response.Ok(request.RequestId, output);
         }
         catch (TimeoutException ex) {
             Console.Error.WriteLine($"[ERROR] Request timeout for {request.App}: {ex.Message}");

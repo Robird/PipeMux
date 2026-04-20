@@ -8,10 +8,10 @@ socket_path = "~/.local/share/pipemux/broker.sock"
 # pipe_name = "pipemux-broker"
 
 # 注册的应用程序
-[apps.texteditor]
-command = "dotnet run --project /repos/PieceTreeSharp/src/PipeMux.TextEditor"
-auto_start = true
-timeout = 30  # 秒，无活动自动关闭会话
+[apps.calculator]
+command = "dotnet run --project /repos/focus/PipeMux/samples/Calculator"
+auto_start = false
+timeout = 30
 
 # 使用 PipeMux.Host 加载任意 DLL 中的调试入口
 # [apps.counter]

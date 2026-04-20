@@ -5,12 +5,12 @@
 // Each operation outputs the current stack state
 //
 // Usage:
-//   pipemux calc push 10    → Stack: [10]
-//   pipemux calc push 20    → Stack: [10, 20]
-//   pipemux calc add        → Stack: [30]
-//   pipemux calc push 5     → Stack: [30, 5]
-//   pipemux calc mul        → Stack: [150]
-//   pipemux calc clear      → Stack: []
+//   pmux calculator push 10    → Stack: [10]
+//   pmux calculator push 20    → Stack: [10, 20]
+//   pmux calculator add        → Stack: [30]
+//   pmux calculator push 5     → Stack: [30, 5]
+//   pmux calculator mul        → Stack: [150]
+//   pmux calculator clear      → Stack: []
 
 using System.CommandLine;
 using PipeMux.Sdk;
@@ -21,147 +21,18 @@ var calculator = new StackCalculator();
 // 创建 PipeMux App
 var app = new PipeMuxApp("calculator");
 
-// === 栈操作命令 ===
-
-// push - 将数值压入栈
 var pushValue = new Argument<double>("value") { Description = "Value to push onto stack" };
-var pushCommand = new Command("push", "Push a value onto the stack") { pushValue };
-pushCommand.SetAction(parseResult => {
-    var value = parseResult.GetValue(pushValue);
-    calculator.Push(value);
-    parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-});
-
-// pop - 弹出栈顶
-var popCommand = new Command("pop", "Pop and discard the top value");
-popCommand.SetAction(parseResult => {
-    try {
-        calculator.Pop();
-        parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-    }
-    catch (InvalidOperationException ex) {
-        parseResult.Configuration.Error.WriteLine($"Error: {ex.Message}");
-        return 1;
-    }
-    return 0;
-});
-
-// dup - 复制栈顶
-var dupCommand = new Command("dup", "Duplicate the top value");
-dupCommand.SetAction(parseResult => {
-    try {
-        calculator.Dup();
-        parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-    }
-    catch (InvalidOperationException ex) {
-        parseResult.Configuration.Error.WriteLine($"Error: {ex.Message}");
-        return 1;
-    }
-    return 0;
-});
-
-// swap - 交换栈顶两个值
-var swapCommand = new Command("swap", "Swap the top two values");
-swapCommand.SetAction(parseResult => {
-    try {
-        calculator.Swap();
-        parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-    }
-    catch (InvalidOperationException ex) {
-        parseResult.Configuration.Error.WriteLine($"Error: {ex.Message}");
-        return 1;
-    }
-    return 0;
-});
-
-// clear - 清空栈
-var clearCommand = new Command("clear", "Clear the stack");
-clearCommand.SetAction(parseResult => {
-    calculator.Clear();
-    parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-});
-
-// peek - 查看栈状态（不修改）
-var peekCommand = new Command("peek", "Show current stack without modifying");
-peekCommand.SetAction(parseResult => {
-    parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-});
-
-// === 算术运算命令 ===
-
-// add - 加法
-var addCommand = new Command("add", "Pop two values, push their sum");
-addCommand.SetAction(parseResult => {
-    try {
-        calculator.Add();
-        parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-    }
-    catch (InvalidOperationException ex) {
-        parseResult.Configuration.Error.WriteLine($"Error: {ex.Message}");
-        return 1;
-    }
-    return 0;
-});
-
-// sub - 减法
-var subCommand = new Command("sub", "Pop two values (a, b), push a - b");
-subCommand.SetAction(parseResult => {
-    try {
-        calculator.Sub();
-        parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-    }
-    catch (InvalidOperationException ex) {
-        parseResult.Configuration.Error.WriteLine($"Error: {ex.Message}");
-        return 1;
-    }
-    return 0;
-});
-
-// mul - 乘法
-var mulCommand = new Command("mul", "Pop two values, push their product");
-mulCommand.SetAction(parseResult => {
-    try {
-        calculator.Mul();
-        parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-    }
-    catch (InvalidOperationException ex) {
-        parseResult.Configuration.Error.WriteLine($"Error: {ex.Message}");
-        return 1;
-    }
-    return 0;
-});
-
-// div - 除法
-var divCommand = new Command("div", "Pop two values (a, b), push a / b");
-divCommand.SetAction(parseResult => {
-    try {
-        calculator.Div();
-        parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-    }
-    catch (InvalidOperationException ex) {
-        parseResult.Configuration.Error.WriteLine($"Error: {ex.Message}");
-        return 1;
-    }
-    catch (DivideByZeroException) {
-        parseResult.Configuration.Error.WriteLine("Error: Division by zero");
-        return 1;
-    }
-    return 0;
-});
-
-// neg - 取反
-var negCommand = new Command("neg", "Negate the top value");
-negCommand.SetAction(parseResult => {
-    try {
-        calculator.Neg();
-        parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
-    }
-    catch (InvalidOperationException ex) {
-        parseResult.Configuration.Error.WriteLine($"Error: {ex.Message}");
-        return 1;
-    }
-    return 0;
-});
+var pushCommand = CreateValueCommand("push", "Push a value onto the stack", pushValue, calculator.Push);
+var popCommand = CreateCommand("pop", "Pop and discard the top value", () => { calculator.Pop(); });
+var dupCommand = CreateCommand("dup", "Duplicate the top value", calculator.Dup);
+var swapCommand = CreateCommand("swap", "Swap the top two values", calculator.Swap);
+var clearCommand = CreateCommand("clear", "Clear the stack", calculator.Clear);
+var peekCommand = CreateCommand("peek", "Show current stack without modifying", () => { });
+var addCommand = CreateCommand("add", "Pop two values, push their sum", calculator.Add);
+var subCommand = CreateCommand("sub", "Pop two values (a, b), push a - b", calculator.Sub);
+var mulCommand = CreateCommand("mul", "Pop two values, push their product", calculator.Mul);
+var divCommand = CreateCommand("div", "Pop two values (a, b), push a / b", calculator.Div);
+var negCommand = CreateCommand("neg", "Negate the top value", calculator.Neg);
 
 // 定义根命令并添加所有子命令
 var rootCommand = new RootCommand("RPN Calculator - A stateful stack-based calculator") {
@@ -182,6 +53,33 @@ var rootCommand = new RootCommand("RPN Calculator - A stateful stack-based calcu
 
 // 运行 App
 await app.RunAsync(rootCommand);
+
+Command CreateCommand(string name, string description, Action action) {
+    var command = new Command(name, description);
+    command.SetAction(parseResult => Execute(parseResult, action));
+    return command;
+}
+
+Command CreateValueCommand<T>(string name, string description, Argument<T> argument, Action<T> action) where T : notnull {
+    var command = new Command(name, description) { argument };
+    command.SetAction(parseResult => {
+        var value = parseResult.GetValue(argument);
+        return Execute(parseResult, () => action(value!));
+    });
+    return command;
+}
+
+int Execute(ParseResult parseResult, Action action) {
+    try {
+        action();
+        parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
+        return 0;
+    }
+    catch (Exception ex) when (ex is InvalidOperationException or DivideByZeroException) {
+        parseResult.Configuration.Error.WriteLine($"Error: {ex.Message}");
+        return 1;
+    }
+}
 
 // === 计算器服务类 ===
 
@@ -236,7 +134,7 @@ class StackCalculator {
     public void Div() {
         var (a, b) = PopTwo();
         if (b == 0)
-            throw new DivideByZeroException();
+            throw new DivideByZeroException("Division by zero");
         _stack.Push(a / b);
     }
 

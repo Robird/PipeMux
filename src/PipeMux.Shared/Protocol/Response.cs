@@ -25,11 +25,6 @@ public sealed class Response {
     public string? Error { get; init; }
 
     /// <summary>
-    /// 会话 ID (可能是新创建的)
-    /// </summary>
-    public string? SessionId { get; init; }
-
-    /// <summary>
     /// 额外的元数据 (如性能统计、调试信息)
     /// </summary>
     public Dictionary<string, string>? Metadata { get; init; }
@@ -37,12 +32,11 @@ public sealed class Response {
     /// <summary>
     /// 创建成功响应
     /// </summary>
-    public static Response Ok(string requestId, string? data = null, string? sessionId = null) {
+    public static Response Ok(string requestId, string? data = null) {
         return new Response {
             RequestId = requestId,
             Success = true,
-            Data = data,
-            SessionId = sessionId
+            Data = data
         };
     }
 

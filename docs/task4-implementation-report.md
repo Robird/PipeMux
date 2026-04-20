@@ -1,5 +1,8 @@
 # Task 4 Implementation Report: Broker Process Management and JSON-RPC Communication
 
+> Historical note: this report describes the pre-StreamJsonRpc implementation state from 2025-12.
+> The current codebase has since been simplified around `PipeMux.Sdk`, `StreamJsonRpc`, and the shared `Request/Response/InvokeResult` protocol types.
+
 ## Summary
 
 ✅ **Task Completed Successfully**

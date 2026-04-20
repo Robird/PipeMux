@@ -23,11 +23,6 @@ public sealed class Request {
     public string? TerminalId { get; init; }
 
     /// <summary>
-    /// 会话 ID (可选，显式指定时可跨终端访问同一实例)
-    /// </summary>
-    public string? SessionId { get; init; }
-
-    /// <summary>
     /// 请求 ID (用于追踪和调试)
     /// </summary>
     public string RequestId { get; init; } = Guid.NewGuid().ToString();

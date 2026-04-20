@@ -1,196 +1,57 @@
-# PipeMux.Calculator
+# PipeMux Calculator Sample
 
-A simple calculator service that implements JSON-RPC 2.0 over stdin/stdout for testing the PipeMux.Broker communication loop.
+这个示例展示的是当前 PipeMux 形态下的“有状态 CLI App”：
 
-## Features
+- 应用代码使用 `PipeMux.Sdk` 暴露一个 `invoke(string[] args)` RPC 入口
+- PipeMux.Broker 负责拉起进程并通过 StreamJsonRpc 转发命令
+- 命令本身仍由 `System.CommandLine` 解析
+- 计算器状态保存在进程内，因此多次 `pmux calculator ...` 调用之间会持续存在
 
-- **JSON-RPC 2.0 Protocol**: Full compliance with JSON-RPC 2.0 specification
-- **Four Basic Operations**: Add, Subtract, Multiply, Divide
-- **Error Handling**: Proper error codes for division by zero, invalid methods, and invalid parameters
-- **Stdin/Stdout Communication**: Reads JSON-RPC requests from stdin, outputs responses to stdout
-- **Logging**: Diagnostic logs sent to stderr (doesn't interfere with JSON-RPC protocol)
+## 功能
 
-## Supported Methods
+- 栈操作：`push` `pop` `dup` `swap` `clear` `peek`
+- 算术操作：`add` `sub` `mul` `div` `neg`
+- 输出格式：每次命令执行后打印当前栈状态，例如 `Stack: [10, 20]`
 
-### 1. `add`
-Adds two numbers.
+## 示例
 
-**Request:**
-```json
-{"jsonrpc": "2.0", "id": 1, "method": "add", "params": {"a": 5, "b": 3}}
-```
-
-**Response:**
-```json
-{"jsonrpc": "2.0", "id": 1, "result": 8}
-```
-
-### 2. `subtract`
-Subtracts second number from first.
-
-**Request:**
-```json
-{"jsonrpc": "2.0", "id": 2, "method": "subtract", "params": {"a": 10, "b": 4}}
-```
-
-**Response:**
-```json
-{"jsonrpc": "2.0", "id": 2, "result": 6}
-```
-
-### 3. `multiply`
-Multiplies two numbers.
-
-**Request:**
-```json
-{"jsonrpc": "2.0", "id": 3, "method": "multiply", "params": {"a": 6, "b": 7}}
-```
-
-**Response:**
-```json
-{"jsonrpc": "2.0", "id": 3, "result": 42}
-```
-
-### 4. `divide`
-Divides first number by second.
-
-**Request:**
-```json
-{"jsonrpc": "2.0", "id": 4, "method": "divide", "params": {"a": 20, "b": 4}}
-```
-
-**Response:**
-```json
-{"jsonrpc": "2.0", "id": 4, "result": 5}
-```
-
-**Error (Division by Zero):**
-```json
-{"jsonrpc": "2.0", "id": 5, "error": {"code": -32000, "message": "Division by zero"}}
-```
-
-## Error Codes
-
-The calculator implements standard JSON-RPC 2.0 error codes:
-
-| Code    | Message          | Description                              |
-|---------|------------------|------------------------------------------|
-| -32700  | Parse error      | Invalid JSON received                    |
-| -32600  | Invalid Request  | Missing required fields                  |
-| -32601  | Method not found | Unknown method name                      |
-| -32602  | Invalid params   | Missing or invalid parameters            |
-| -32000  | Server error     | Application error (e.g., division by zero)|
-
-## Usage
-
-### Build
 ```bash
-dotnet build src/PipeMux.Calculator
+pmux calculator push 10
+pmux calculator push 20
+pmux calculator add
+pmux calculator neg
+pmux calculator peek
 ```
 
-### Run
+## 本地运行
+
+直接作为普通 .NET 进程运行：
+
 ```bash
-# Echo a single request
-echo '{"jsonrpc": "2.0", "id": 1, "method": "add", "params": {"a": 5, "b": 3}}' | \
-    dotnet run --project src/PipeMux.Calculator
-
-# Run interactively (type JSON requests, press Enter)
-dotnet run --project src/PipeMux.Calculator
-
-# Batch processing
-cat requests.json | dotnet run --project src/PipeMux.Calculator
+dotnet run --project samples/Calculator
 ```
 
-### Manual Testing
-Run the included test script:
+通过 Broker/CLI 运行：
+
+```toml
+[apps.calculator]
+command = "dotnet run --project /path/to/PipeMux/samples/Calculator"
+timeout = 30
+```
+
+然后：
+
 ```bash
-./src/PipeMux.Calculator/test-calculator.sh
+pmux calculator push 10
+pmux calculator add
 ```
 
-### Unit Tests
-```bash
-dotnet test tests/PipeMux.Calculator.Tests
-```
+## 实现说明
 
-## Architecture
+- [Program.cs](Program.cs) 里定义了 `RootCommand` 和所有子命令
+- `StackCalculator` 是真正的有状态服务对象
+- `PipeMuxApp` 接管 stdin/stdout 并提供给 Broker 调用的 RPC 入口
 
-### Project Structure
-```
-src/PipeMux.Calculator/
-├── PipeMux.Calculator.csproj      # Executable project
-├── Program.cs                   # Main entry point (stdin/stdout loop)
-├── CalculatorService.cs         # JSON-RPC request handler
-├── test-calculator.sh           # Manual test script
-└── README.md                    # This file
-```
+## 备注
 
-### Dependencies
-- **PipeMux.Shared**: Provides JSON-RPC protocol types (`JsonRpcRequest`, `JsonRpcResponse`, `JsonRpcError`)
-- **System.Text.Json**: JSON serialization/deserialization
-
-### Communication Flow
-1. **Input**: JSON-RPC request from stdin (one per line)
-2. **Processing**: 
-   - Parse JSON-RPC request
-   - Route to appropriate method handler
-   - Execute calculation
-   - Handle errors (division by zero, invalid params, etc.)
-3. **Output**: JSON-RPC response to stdout
-
-### Logging
-- All diagnostic logs go to **stderr**
-- This ensures **stdout** contains only valid JSON-RPC responses
-- Logs can be suppressed: `dotnet run --project src/PipeMux.Calculator 2>/dev/null`
-
-## Examples
-
-### Success Case
-```bash
-$ echo '{"jsonrpc": "2.0", "id": 1, "method": "add", "params": {"a": 5, "b": 3}}' | \
-    dotnet run --project src/PipeMux.Calculator 2>/dev/null
-{"jsonrpc":"2.0","id":1,"result":8,"error":null}
-```
-
-### Error Case (Division by Zero)
-```bash
-$ echo '{"jsonrpc": "2.0", "id": 5, "method": "divide", "params": {"a": 10, "b": 0}}' | \
-    dotnet run --project src/PipeMux.Calculator 2>/dev/null
-{"jsonrpc":"2.0","id":5,"result":null,"error":{"code":-32000,"message":"Division by zero","data":null}}
-```
-
-### Error Case (Unknown Method)
-```bash
-$ echo '{"jsonrpc": "2.0", "id": 6, "method": "unknown", "params": {"a": 1, "b": 2}}' | \
-    dotnet run --project src/PipeMux.Calculator 2>/dev/null
-{"jsonrpc":"2.0","id":6,"result":null,"error":{"code":-32601,"message":"Method not found","data":"unknown"}}
-```
-
-## Testing
-
-The project includes comprehensive unit tests covering:
-- ✅ 4 success scenarios (add, subtract, multiply, divide)
-- ✅ Division by zero error
-- ✅ Unknown method error
-- ✅ Null parameters error
-- ✅ Invalid parameters error
-- ✅ Negative numbers
-- ✅ Decimal numbers
-
-Run tests:
-```bash
-dotnet test tests/PipeMux.Calculator.Tests
-```
-
-## Integration with PipeMux.Broker
-
-This calculator serves as a test application for the PipeMux.Broker communication loop:
-
-1. **Broker** receives user command (e.g., "calculate 5 + 3")
-2. **Broker** launches Calculator process
-3. **Broker** sends JSON-RPC request to Calculator's stdin
-4. **Calculator** processes request and sends response to stdout
-5. **Broker** receives response and formats it for the user
-
-## License
-
-Part of the PieceTreeSharp project.
+这个 README 已不再描述早期“手写 JSON-RPC 请求/响应”的旧实现；当前 sample 基于 `PipeMux.Sdk + StreamJsonRpc + System.CommandLine`。

@@ -154,7 +154,7 @@ public sealed class AppProcess : IDisposable {
     /// <summary>
     /// 调用远程方法并返回结果
     /// </summary>
-    public async Task<object?> InvokeAsync(string method, object?[] args, TimeSpan timeout, CancellationToken ct = default) {
+    public async Task<T> InvokeAsync<T>(string method, object?[] args, TimeSpan timeout, CancellationToken ct = default) {
         if (!IsHealthy()) {
             throw new InvalidOperationException($"Process {AppName} is not healthy");
         }
@@ -164,7 +164,7 @@ public sealed class AppProcess : IDisposable {
 
         try {
             // StreamJsonRpc 会自动处理 JSON-RPC 协议
-            return await _rpc.InvokeWithCancellationAsync<object?>(method, args, cts.Token);
+            return await _rpc.InvokeWithCancellationAsync<T>(method, args, cts.Token);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested && !ct.IsCancellationRequested) {
             _isHealthy = false;

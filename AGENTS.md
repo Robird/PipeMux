@@ -14,6 +14,34 @@ Broker and Front of Stateful CLI Apps
 
 ## 最新进展
 
+### 后续化简落地 (2026-04-21): 端点统一 + 协议收敛 + sample/doc 清理 ✅
+- **统一 Broker 连接默认值**:
+  - 新增 `src/PipeMux.Shared/BrokerConnectionDefaults.cs` / `BrokerConnectionResolver.cs` / `BrokerEndpoint.cs`
+  - `broker.toml` 路径、默认 socket path、默认 pipe name、env var 名称、client/server transport 选择逻辑统一下沉到 Shared
+  - Broker 与 CLI 不再各自维护一套默认值和判定分支
+- **强类型 `InvokeResult` 下沉**:
+  - 新增 `src/PipeMux.Shared/Protocol/InvokeResult.cs`
+  - Broker 改为 `InvokeAsync<InvokeResult>()` 强类型调用，不再手工解析 `JsonElement` 或兼容 Pascal/camelCase 属性名
+  - `src/PipeMux.Sdk/InvokeResult.cs` 已重命名为 `.bak`，SDK 直接使用 Shared 协议类型
+- **移除 `SessionId` 遗留抽象**:
+  - 从 `Request` / `Response` 模型中移除 `SessionId`
+  - CLI 不再输出未实现的 `[Session: ...]`
+- **sample / 文档清理**:
+  - `samples/Calculator/Program.cs` 抽取重复命令模板，减少样板 `try/catch + 输出` 代码
+  - 更新 `samples/Calculator/README.md`、`src/PipeMux.Broker/README.md`、`docs/pipemux-quickstart.md`、`docs/README.md`
+  - `docs/task4-implementation-report.md` 增加 historical note，避免与当前实现混淆
+- **验证**:
+  - `dotnet build` succeeded，0 warning，0 error ✅
+
+### 后续化简候选分析 (2026-04-21): 可继续收敛的 4 个方向 💡
+- **高优先级**:
+  - 统一 Broker 连接默认值与配置路径：`broker.toml` 路径、默认 socket path、默认 pipe name、transport 选择逻辑仍分散在 Broker/CLI 多处，适合下沉到 Shared
+  - 将 `InvokeResult`/app invoke 协议下沉到 Shared：Broker 目前仍以 `JsonElement` + Pascal/camelCase 双分支手工解析返回值，适合改为强类型反序列化
+- **中优先级**:
+  - 清理半成品 session 抽象：`Request.SessionId` / `Response.SessionId` 已存在，但 Broker 尚未真正使用；建议二选一，要么落地要么移除
+  - 精简 sample / 文档：`samples/Calculator/Program.cs` 里命令处理重复较多，且部分 README/报告仍停留在旧 JSON-RPC 手写阶段
+- **策略建议**: 若只做一轮“小而稳”的继续化简，优先做“连接配置统一 + 强类型 InvokeResult”；收益最高，风险最低
+
 ### 代码化简 (2026-04-21): 死代码清理 + 重复消除 🧹
 - **删除死代码**: `JsonRpcRequest.cs` / `JsonRpcResponse.cs` / `JsonRpcError.cs` 已删除（StreamJsonRpc 集成后的遗留）
   - `JsonRpc.cs` 中 `SerializeJsonRpcRequest()` / `DeserializeJsonRpcResponse()` 两个死方法已移除
