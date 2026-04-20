@@ -40,13 +40,15 @@
 
 ## 快速开始
 
+Ubuntu 部署可参考 [`docs/ubuntu-deployment.md`](ubuntu-deployment.md)。
+
 ### 1. 配置 Broker
 
 创建配置文件 `~/.config/pipemux/broker.toml`：
 
 ```toml
 [broker]
-pipe_name = "pipemux-broker"
+socket_path = "~/.local/share/pipemux/broker.sock"
 
 [apps.calculator]
 command = "dotnet run --project /path/to/PipeMux/samples/Calculator -c Release"

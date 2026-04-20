@@ -86,15 +86,14 @@ public sealed class AppProcess : IDisposable {
     public AppProcess(string appName, string command) {
         AppName = appName;
 
-        // 解析命令 (简单实现，不处理引号)
-        var parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = CommandLineParser.Parse(command)
+            .Select(ExpandArgument)
+            .ToArray();
         var fileName = parts[0];
-        var arguments = string.Join(' ', parts.Skip(1));
 
         _process = new Process {
             StartInfo = new ProcessStartInfo {
                 FileName = fileName,
-                Arguments = arguments,
                 UseShellExecute = false,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
@@ -102,9 +101,32 @@ public sealed class AppProcess : IDisposable {
                 CreateNoWindow = true
             }
         };
+
+        foreach (var argument in parts.Skip(1)) {
+            _process.StartInfo.ArgumentList.Add(argument);
+        }
         
         // JsonRpc 将在 Start() 中初始化
         _rpc = null!;
+    }
+
+    private static string ExpandArgument(string argument) {
+        var expanded = Environment.ExpandEnvironmentVariables(argument);
+        var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        if (expanded == "~") {
+            return homeDir;
+        }
+
+        if (expanded.StartsWith("~/", StringComparison.Ordinal) ||
+            expanded.StartsWith("~\\", StringComparison.Ordinal)) {
+            var relativePath = expanded[2..]
+                .Replace('\\', Path.DirectorySeparatorChar)
+                .Replace('/', Path.DirectorySeparatorChar);
+            return Path.Combine(homeDir, relativePath);
+        }
+
+        return expanded;
     }
 
     public void Start() {

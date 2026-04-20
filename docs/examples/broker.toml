@@ -1,20 +1,26 @@
 # PipeMux Broker 配置示例
 
 [broker]
-# Unix/Linux/Mac: 使用 Unix Domain Socket
+# Linux/Ubuntu: 推荐使用 Unix Domain Socket
 socket_path = "~/.local/share/pipemux/broker.sock"
 
-# Windows: 使用 Named Pipe (取消注释以启用)
-# pipe_name = "PipeMuxBroker"
+# 如需强制使用 Named Pipe，可改用:
+# pipe_name = "pipemux-broker"
 
 # 注册的应用程序
 [apps.texteditor]
 command = "dotnet run --project /repos/PieceTreeSharp/src/PipeMux.TextEditor"
-autostart = true
+auto_start = true
 timeout = 30  # 秒，无活动自动关闭会话
+
+# 使用 PipeMux.Host 加载任意 DLL 中的调试入口
+# [apps.counter]
+# command = "/path/to/PipeMux.Host /path/to/MyLib.dll MyNamespace.DebugEntries.BuildCounter"
+# auto_start = false
+# timeout = 30
 
 # 示例: 未来的调试器应用
 # [apps.debugger]
 # command = "/path/to/PipeMux.Debugger"
-# autostart = false
+# auto_start = false
 # timeout = 60

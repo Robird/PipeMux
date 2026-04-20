@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Net.Sockets;
 using System.Text;
 using PipeMux.Shared;
 using PipeMux.Shared.Protocol;
@@ -9,7 +10,6 @@ namespace PipeMux.CLI;
 /// CLI 客户端 - 连接到 Broker 并发送请求
 /// </summary>
 public sealed class BrokerClient {
-    private const string DefaultPipeName = "pipemux-broker";
     private const int ConnectionTimeoutSeconds = 5;
 
     /// <summary>
@@ -45,44 +45,13 @@ public sealed class BrokerClient {
     /// </summary>
     private async Task<Response> SendRequestCoreAsync(Request request) {
         try {
-            var pipeName = GetPipeName();
+            var endpoint = BrokerEndpointResolver.Resolve();
 
-            // 创建 Named Pipe 客户端
-            using var pipeClient = new NamedPipeClientStream(
-                ".",           // 服务器名（本地）
-                pipeName,
-                PipeDirection.InOut,
-                PipeOptions.Asynchronous
-            );
-
-            // 连接到 Broker（带超时）
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(ConnectionTimeoutSeconds));
-            try {
-                await pipeClient.ConnectAsync(cts.Token);
-            }
-            catch (TimeoutException) {
-                return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
-            }
-            catch (OperationCanceledException) {
-                return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
-            }
-
-            // 发送请求
-            using var writer = new StreamWriter(pipeClient, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
-            var requestJson = JsonRpc.SerializeRequest(request);
-            await writer.WriteLineAsync(requestJson);
-
-            // 接收响应
-            using var reader = new StreamReader(pipeClient, Encoding.UTF8, leaveOpen: true);
-            var responseJson = await reader.ReadLineAsync();
-
-            if (string.IsNullOrEmpty(responseJson)) {
-                return Response.Fail(request.RequestId, "Broker returned empty response");
-            }
-
-            // 反序列化
-            var response = JsonRpc.DeserializeResponse(responseJson);
-            return response ?? Response.Fail(request.RequestId, "Invalid response from broker");
+            return endpoint.Transport switch {
+                BrokerTransportKind.NamedPipe => await SendViaNamedPipeAsync(request, endpoint.Value),
+                BrokerTransportKind.UnixSocket => await SendViaUnixSocketAsync(request, endpoint.Value),
+                _ => Response.Fail(request.RequestId, "Unsupported broker transport")
+            };
         }
         catch (TimeoutException) {
             return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
@@ -99,11 +68,59 @@ public sealed class BrokerClient {
         }
     }
 
-    /// <summary>
-    /// 获取 Pipe 名称（支持环境变量覆盖）
-    /// </summary>
-    private static string GetPipeName() {
-        return Environment.GetEnvironmentVariable("DOCUI_PIPE_NAME")
-               ?? DefaultPipeName;
+    private async Task<Response> SendViaNamedPipeAsync(Request request, string pipeName) {
+        using var pipeClient = new NamedPipeClientStream(
+            ".",
+            pipeName,
+            PipeDirection.InOut,
+            PipeOptions.Asynchronous
+        );
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(ConnectionTimeoutSeconds));
+        try {
+            await pipeClient.ConnectAsync(cts.Token);
+        }
+        catch (TimeoutException) {
+            return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
+        }
+        catch (OperationCanceledException) {
+            return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
+        }
+
+        return await SendOverStreamAsync(pipeClient, request);
+    }
+
+    private async Task<Response> SendViaUnixSocketAsync(Request request, string socketPath) {
+        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(ConnectionTimeoutSeconds));
+
+        try {
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cts.Token);
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode is SocketError.AddressNotAvailable or SocketError.HostNotFound or SocketError.ConnectionRefused or SocketError.NotConnected) {
+            return Response.Fail(request.RequestId, $"Broker not running: {ex.Message}");
+        }
+        catch (OperationCanceledException) {
+            return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
+        }
+
+        using var stream = new NetworkStream(socket, ownsSocket: false);
+        return await SendOverStreamAsync(stream, request);
+    }
+
+    private static async Task<Response> SendOverStreamAsync(Stream stream, Request request) {
+        using var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
+        var requestJson = JsonRpc.SerializeRequest(request);
+        await writer.WriteLineAsync(requestJson);
+
+        using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
+        var responseJson = await reader.ReadLineAsync();
+
+        if (string.IsNullOrEmpty(responseJson)) {
+            return Response.Fail(request.RequestId, "Broker returned empty response");
+        }
+
+        var response = JsonRpc.DeserializeResponse(responseJson);
+        return response ?? Response.Fail(request.RequestId, "Invalid response from broker");
     }
 }

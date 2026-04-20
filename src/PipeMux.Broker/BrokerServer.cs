@@ -1,4 +1,6 @@
 using System.IO.Pipes;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using PipeMux.Shared.Protocol;
 using StreamJsonRpc;
@@ -39,12 +41,17 @@ public sealed class BrokerServer {
             }
         }
 
-        // 启动 Named Pipe 服务器循环
-        var pipeName = GetPipeName();
-        Console.Error.WriteLine($"[INFO] Broker started, listening on pipe: {pipeName}");
-        
         try {
-            await RunNamedPipeServerAsync(pipeName, _cts.Token);
+            if (UseUnixSocketTransport()) {
+                var socketPath = _config.GetSocketPath();
+                Console.Error.WriteLine($"[INFO] Broker started, listening on unix socket: {socketPath}");
+                await RunUnixSocketServerAsync(socketPath, _cts.Token);
+            }
+            else {
+                var pipeName = _config.GetPipeName();
+                Console.Error.WriteLine($"[INFO] Broker started, listening on pipe: {pipeName}");
+                await RunNamedPipeServerAsync(pipeName, _cts.Token);
+            }
         }
         catch (OperationCanceledException) {
             Console.Error.WriteLine("[INFO] Broker shutting down...");
@@ -83,27 +90,7 @@ public sealed class BrokerServer {
 
                 // P0 Fix: Track client task and handle exceptions
                 var clientPipe = pipeServer;
-                var clientTask = Task.Run(async () => {
-                    try {
-                        await HandleClientAsync(clientPipe);
-                    }
-                    catch (Exception ex) {
-                        Console.Error.WriteLine($"[ERROR] Unhandled client task exception: {ex.Message}");
-                    }
-                    finally {
-                        clientPipe.Dispose();
-                    }
-                }, cancellationToken);
-                
-                // Track task and auto-remove when complete
-                lock (_taskLock) {
-                    _clientTasks.Add(clientTask);
-                }
-                _ = clientTask.ContinueWith(t => {
-                    lock (_taskLock) {
-                        _clientTasks.Remove(t);
-                    }
-                }, TaskScheduler.Default);
+                TrackClient(clientPipe, cancellationToken);
                 
                 // 重要: 不在这里 dispose，由 Task 负责
                 pipeServer = null;
@@ -121,12 +108,79 @@ public sealed class BrokerServer {
     }
 
     /// <summary>
+    /// Unix Domain Socket 服务器循环
+    /// </summary>
+    private async Task RunUnixSocketServerAsync(string socketPath, CancellationToken cancellationToken) {
+        var socketDirectory = Path.GetDirectoryName(socketPath);
+        if (!string.IsNullOrEmpty(socketDirectory)) {
+            Directory.CreateDirectory(socketDirectory);
+        }
+
+        CleanupUnixSocket(socketPath);
+
+        var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        try {
+            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+            listener.Listen(128);
+
+            while (!cancellationToken.IsCancellationRequested) {
+                Socket? clientSocket = null;
+                try {
+                    clientSocket = await listener.AcceptAsync(cancellationToken);
+                    Console.Error.WriteLine("[INFO] Client connected");
+
+                    var clientStream = new NetworkStream(clientSocket, ownsSocket: true);
+                    clientSocket = null;
+                    TrackClient(clientStream, cancellationToken);
+                }
+                catch (OperationCanceledException) {
+                    clientSocket?.Dispose();
+                    throw;
+                }
+                catch (Exception ex) {
+                    clientSocket?.Dispose();
+                    Console.Error.WriteLine($"[ERROR] Unix socket server loop error: {ex.Message}");
+                    await Task.Delay(100, cancellationToken);
+                }
+            }
+        }
+        finally {
+            listener.Dispose();
+            CleanupUnixSocket(socketPath);
+        }
+    }
+
+    private void TrackClient(Stream clientStream, CancellationToken cancellationToken) {
+        var clientTask = Task.Run(async () => {
+            try {
+                await HandleClientAsync(clientStream);
+            }
+            catch (Exception ex) {
+                Console.Error.WriteLine($"[ERROR] Unhandled client task exception: {ex.Message}");
+            }
+            finally {
+                clientStream.Dispose();
+            }
+        }, cancellationToken);
+
+        lock (_taskLock) {
+            _clientTasks.Add(clientTask);
+        }
+
+        _ = clientTask.ContinueWith(t => {
+            lock (_taskLock) {
+                _clientTasks.Remove(t);
+            }
+        }, TaskScheduler.Default);
+    }
+
+    /// <summary>
     /// 处理单个客户端连接
     /// </summary>
-    private async Task HandleClientAsync(NamedPipeServerStream pipeServer) {
+    private async Task HandleClientAsync(Stream stream) {
         try {
-            using var reader = new StreamReader(pipeServer, Encoding.UTF8, leaveOpen: true);
-            using var writer = new StreamWriter(pipeServer, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
+            using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
+            using var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
 
             // 读取客户端请求（JSON）
             var requestJson = await reader.ReadLineAsync();
@@ -173,11 +227,33 @@ public sealed class BrokerServer {
     }
 
     /// <summary>
-    /// 获取 Pipe 名称
+    /// 选择是否使用 Unix Domain Socket
     /// </summary>
-    private string GetPipeName() {
-        // 从配置读取，否则使用默认值
-        return _config.Broker.PipeName ?? "pipemux-broker";
+    private bool UseUnixSocketTransport() {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_config.Broker.SocketPath)) {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_config.Broker.PipeName)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static void CleanupUnixSocket(string socketPath) {
+        try {
+            if (File.Exists(socketPath)) {
+                File.Delete(socketPath);
+            }
+        }
+        catch (Exception ex) {
+            Console.Error.WriteLine($"[WARN] Failed to clean up unix socket '{socketPath}': {ex.Message}");
+        }
     }
 
     /// <summary>

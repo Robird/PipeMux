@@ -1,0 +1,15 @@
+[Unit]
+Description=PipeMux Broker
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/pipemux
+Environment=HOME=%h
+ExecStart=%h/.local/share/pipemux/bin/broker/PipeMux.Broker
+Restart=always
+RestartSec=2
+KillMode=mixed
+
+[Install]
+WantedBy=default.target
