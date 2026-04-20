@@ -14,6 +14,50 @@ Broker and Front of Stateful CLI Apps
 
 ## 最新进展
 
+### Ubuntu 部署文档补充 (2026-04-20): CLI / Host / Broker 部署说明 🐧
+- **新增文档**: `docs/ubuntu-deployment.md`
+  - 覆盖 `src/PipeMux.CLI`、`src/PipeMux.Host`、`src/PipeMux.Broker` 在 Ubuntu 上的发布与部署
+  - 包含 framework-dependent 与 self-contained 两种 `dotnet publish` 方式
+  - 提供 user-level `systemd` 部署方式、`broker.toml` 示例、`pmux` 命令入口
+- **新增安装产物**:
+  - `scripts/install-ubuntu-user.sh` — 本机一键安装/更新脚本，可重复执行
+  - `deploy/systemd/user/pipemux-broker.service` — user-level `systemd` 服务成品
+- **文档修正**:
+  - `docs/examples/broker.toml` 改回 Linux 优先示例 `socket_path = "~/.local/share/pipemux/broker.sock"`
+  - `docs/README.md` 增加 Ubuntu 部署文档入口
+- **本轮顺手修复**:
+  - `socket_path` 已实际接入 Broker/CLI，Ubuntu 下可用 Unix Domain Socket ✅
+  - CLI 新增 `PIPEMUX_SOCKET_PATH` / `PIPEMUX_PIPE_NAME`，并兼容旧的 `DOCUI_PIPE_NAME` ✅
+  - Broker 对 app `command` 增加引号解析，不再只做简单空格切分 ✅
+  - Broker 启动子进程前会展开 `~` 与环境变量路径，文档示例可直接成立 ✅
+- **本地验证**:
+  - `PipeMux.Broker` 发布产物可在 Ubuntu 上直接启动 ✅
+  - `PipeMux.CLI` 发布产物可直接连接 Broker ✅
+  - `PipeMux.Host` 可被 Broker 拉起并加载 `samples/HostDemo/HostDemo.dll` ✅
+  - 安装脚本在临时 HOME 下可完成发布、落盘、生成配置与 wrapper ✅
+  - 基于 `socket_path` 的 CLI → Broker → Host/Calculator 冒烟验证通过 ✅
+
+### PipeMux.Host 通用宿主程序 (2026-04-20): 动态加载入口 🧩
+- **定位**: 类似 `rundll32` / `python -m` 的通用宿主进程
+  - 加载任意 .NET DLL 中的静态方法作为 PipeMux 应用入口
+  - 目标 DLL 无需引用 PipeMux.Sdk，只需 System.CommandLine
+  - 一个 DLL 可包含多个入口，通过参数选择
+- **用法**: `pipemux-host <assemblyPath> <Namespace.Type.Method>`
+  - 方法签名: `static RootCommand Method()` 或 `static Task<RootCommand> Method()`
+  - 自动从方法名推导应用名 (BuildCalculator → calculator)
+- **新增文件**:
+  - `src/PipeMux.Host/` — 宿主 exe 项目 (PipeMux.Host.csproj, Program.cs, HostLoadContext.cs, EntryPointResolver.cs)
+  - `samples/HostDemo/` — 测试类库，含两个入口 (BuildCounter, BuildGreeter)
+- **技术要点**:
+  - `AssemblyDependencyResolver` + 自定义 `AssemblyLoadContext` 隔离加载
+  - System.CommandLine 共享到宿主上下文，保证 RootCommand 类型一致
+  - 详细错误提示：可用类型/方法列表
+- **测试结果**: 
+  - 直接 JSON-RPC 管道测试 ✅ (Counter: 7 个请求全部正确，有状态保持)
+  - Greeter 入口测试 ✅ (hello + history)
+  - **完整集成路径 (CLI → Broker → Host → HostDemo DLL)** ✅
+- **附带修复**: `docs/examples/broker.toml` 中 `autostart` → `auto_start` (匹配 Tomlyn PascalCase 映射)
+
 ### PipeMux Broker 骨架 (2025-12-06 上午): 新方向启动 🚀
 - **愿景**: 从"CLI 时代"到"PipeMux 时代"的转变
   - 输入: CLI / Tool Calling (LLM 擅长)
