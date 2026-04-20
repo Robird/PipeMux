@@ -1,3 +1,4 @@
+using PipeMux.Shared;
 using Tomlyn;
 
 namespace PipeMux.Broker;
@@ -33,7 +34,7 @@ public static class ConfigLoader {
 
     private static BrokerConfig CreateDefaultConfig() {
         return new BrokerConfig {
-            Broker = new BrokerSettings {
+            Broker = new BrokerConnectionSettings {
                 SocketPath = null // 使用默认
             },
             Apps = new Dictionary<string, AppSettings>()

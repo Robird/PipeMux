@@ -14,6 +14,17 @@ Broker and Front of Stateful CLI Apps
 
 ## 最新进展
 
+### 代码化简 (2026-04-21): 死代码清理 + 重复消除 🧹
+- **删除死代码**: `JsonRpcRequest.cs` / `JsonRpcResponse.cs` / `JsonRpcError.cs` 已删除（StreamJsonRpc 集成后的遗留）
+  - `JsonRpc.cs` 中 `SerializeJsonRpcRequest()` / `DeserializeJsonRpcResponse()` 两个死方法已移除
+- **统一 `ExpandPath`**: 三处重复的 `~` 展开逻辑合并到 `src/PipeMux.Shared/PathHelper.cs`
+  - `BrokerConfig.ExpandPath()` / `BrokerEndpointResolver.ExpandPath()` / `ProcessRegistry.ExpandArgument()` → `PathHelper.ExpandPath()`
+- **去 `Unsafe.AsRef` hack**: `ProcessRegistry.cs` 中 `AppProcess._rpc` 去掉 `readonly`，直接赋值
+- **统一 Config 模型**: 新增 `src/PipeMux.Shared/BrokerConnectionConfig.cs`
+  - Broker 的 `BrokerSettings` 和 CLI 的 `CliBrokerConfig/CliBrokerSettings` 合并为 `BrokerConnectionSettings`
+- **`TerminalIdInfo` 移出 Shared**: 仅 `samples/TerminalIdTest` 使用，已内联到该样本中
+- **编译验证**: 全 7 项目 build succeeded，0 warning 0 error ✅
+
 ### Ubuntu 部署文档补充 (2026-04-20): CLI / Host / Broker 部署说明 🐧
 - **新增文档**: `docs/ubuntu-deployment.md`
   - 覆盖 `src/PipeMux.CLI`、`src/PipeMux.Host`、`src/PipeMux.Broker` 在 Ubuntu 上的发布与部署

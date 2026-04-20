@@ -380,28 +380,3 @@ public static class TerminalIdentifier {
 
     #endregion
 }
-
-/// <summary>
-/// 终端标识符的解析结果
-/// </summary>
-public record TerminalIdInfo {
-    public required string Type { get; init; }
-    public required string Value { get; init; }
-    public required string RawId { get; init; }
-
-    public static TerminalIdInfo Parse(string terminalId) {
-        var colonIndex = terminalId.IndexOf(':');
-        if (colonIndex > 0) {
-            return new TerminalIdInfo {
-                Type = terminalId[..colonIndex],
-                Value = terminalId[(colonIndex + 1)..],
-                RawId = terminalId
-            };
-        }
-        return new TerminalIdInfo {
-            Type = "unknown",
-            Value = terminalId,
-            RawId = terminalId
-        };
-    }
-}

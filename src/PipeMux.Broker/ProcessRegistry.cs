@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Nerdbank.Streams;
+using PipeMux.Shared;
 using StreamJsonRpc;
 
 namespace PipeMux.Broker;
@@ -76,7 +77,7 @@ public sealed class ProcessRegistry {
 /// </summary>
 public sealed class AppProcess : IDisposable {
     private readonly Process _process;
-    private readonly JsonRpc _rpc;
+    private JsonRpc _rpc;
     private volatile bool _isHealthy = true;
     
     public string AppName { get; }
@@ -87,7 +88,7 @@ public sealed class AppProcess : IDisposable {
         AppName = appName;
 
         var parts = CommandLineParser.Parse(command)
-            .Select(ExpandArgument)
+            .Select(PathHelper.ExpandPath)
             .ToArray();
         var fileName = parts[0];
 
@@ -108,25 +109,6 @@ public sealed class AppProcess : IDisposable {
         
         // JsonRpc 将在 Start() 中初始化
         _rpc = null!;
-    }
-
-    private static string ExpandArgument(string argument) {
-        var expanded = Environment.ExpandEnvironmentVariables(argument);
-        var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-        if (expanded == "~") {
-            return homeDir;
-        }
-
-        if (expanded.StartsWith("~/", StringComparison.Ordinal) ||
-            expanded.StartsWith("~\\", StringComparison.Ordinal)) {
-            var relativePath = expanded[2..]
-                .Replace('\\', Path.DirectorySeparatorChar)
-                .Replace('/', Path.DirectorySeparatorChar);
-            return Path.Combine(homeDir, relativePath);
-        }
-
-        return expanded;
     }
 
     public void Start() {
@@ -166,8 +148,7 @@ public sealed class AppProcess : IDisposable {
         var rpc = new JsonRpc(handler);
         rpc.StartListening();
         
-        // 替换 null 初始化的 _rpc
-        System.Runtime.CompilerServices.Unsafe.AsRef(in _rpc) = rpc;
+        _rpc = rpc;
     }
 
     /// <summary>

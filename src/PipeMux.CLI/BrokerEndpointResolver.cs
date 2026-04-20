@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using PipeMux.Shared;
 using Tomlyn;
 
 namespace PipeMux.CLI;
@@ -20,7 +21,7 @@ internal static class BrokerEndpointResolver {
     public static BrokerEndpoint Resolve() {
         var explicitSocketPath = Environment.GetEnvironmentVariable(SocketPathEnvVar);
         if (!string.IsNullOrWhiteSpace(explicitSocketPath)) {
-            return new BrokerEndpoint(BrokerTransportKind.UnixSocket, ExpandPath(explicitSocketPath));
+            return new BrokerEndpoint(BrokerTransportKind.UnixSocket, PathHelper.ExpandPath(explicitSocketPath));
         }
 
         var explicitPipeName = Environment.GetEnvironmentVariable(PipeNameEnvVar)
@@ -37,7 +38,7 @@ internal static class BrokerEndpointResolver {
         }
 
         if (!string.IsNullOrWhiteSpace(config?.Broker.SocketPath)) {
-            return new BrokerEndpoint(BrokerTransportKind.UnixSocket, ExpandPath(config!.Broker.SocketPath!));
+            return new BrokerEndpoint(BrokerTransportKind.UnixSocket, PathHelper.ExpandPath(config!.Broker.SocketPath!));
         }
 
         if (!string.IsNullOrWhiteSpace(config?.Broker.PipeName)) {
@@ -47,7 +48,7 @@ internal static class BrokerEndpointResolver {
         return new BrokerEndpoint(BrokerTransportKind.UnixSocket, GetDefaultSocketPath());
     }
 
-    private static CliBrokerConfig? TryLoadConfig() {
+    private static BrokerConnectionConfig? TryLoadConfig() {
         try {
             var configPath = GetConfigPath();
             if (!File.Exists(configPath)) {
@@ -55,7 +56,7 @@ internal static class BrokerEndpointResolver {
             }
 
             var toml = File.ReadAllText(configPath);
-            return Toml.ToModel<CliBrokerConfig>(toml);
+            return Toml.ToModel<BrokerConnectionConfig>(toml);
         }
         catch {
             return null;
@@ -72,31 +73,4 @@ internal static class BrokerEndpointResolver {
         return Path.Combine(baseDir, "pipemux", "broker.sock");
     }
 
-    private static string ExpandPath(string path) {
-        var expanded = Environment.ExpandEnvironmentVariables(path);
-        var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-        if (expanded == "~") {
-            return homeDir;
-        }
-
-        if (expanded.StartsWith("~/", StringComparison.Ordinal) ||
-            expanded.StartsWith("~\\", StringComparison.Ordinal)) {
-            var relativePath = expanded[2..]
-                .Replace('\\', Path.DirectorySeparatorChar)
-                .Replace('/', Path.DirectorySeparatorChar);
-            return Path.Combine(homeDir, relativePath);
-        }
-
-        return expanded;
-    }
-
-    private sealed class CliBrokerConfig {
-        public CliBrokerSettings Broker { get; set; } = new();
-    }
-
-    private sealed class CliBrokerSettings {
-        public string? SocketPath { get; set; }
-        public string? PipeName { get; set; }
-    }
 }

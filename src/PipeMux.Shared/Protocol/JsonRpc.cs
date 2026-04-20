@@ -40,18 +40,4 @@ public static class JsonRpc {
     public static Response? DeserializeResponse(string json) {
         return JsonSerializer.Deserialize<Response>(json, SerializerOptions);
     }
-
-    /// <summary>
-    /// 序列化 JSON-RPC 请求
-    /// </summary>
-    public static string SerializeJsonRpcRequest(JsonRpcRequest request) {
-        return JsonSerializer.Serialize(request, SerializerOptions);
-    }
-
-    /// <summary>
-    /// 反序列化 JSON-RPC 响应
-    /// </summary>
-    public static JsonRpcResponse? DeserializeJsonRpcResponse(string json) {
-        return JsonSerializer.Deserialize<JsonRpcResponse>(json, SerializerOptions);
-    }
 }

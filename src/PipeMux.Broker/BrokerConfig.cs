@@ -1,10 +1,12 @@
+using PipeMux.Shared;
+
 namespace PipeMux.Broker;
 
 /// <summary>
 /// Broker 配置模型 (对应 TOML 文件)
 /// </summary>
 public sealed class BrokerConfig {
-    public BrokerSettings Broker { get; set; } = new();
+    public BrokerConnectionSettings Broker { get; set; } = new();
     public Dictionary<string, AppSettings> Apps { get; set; } = new();
 
     /// <summary>
@@ -12,7 +14,7 @@ public sealed class BrokerConfig {
     /// </summary>
     public string GetSocketPath() {
         if (!string.IsNullOrEmpty(Broker.SocketPath)) {
-            return ExpandPath(Broker.SocketPath);
+            return PathHelper.ExpandPath(Broker.SocketPath);
         }
 
         // 默认路径
@@ -29,29 +31,6 @@ public sealed class BrokerConfig {
             : Broker.PipeName;
     }
 
-    private static string ExpandPath(string path) {
-        var expanded = Environment.ExpandEnvironmentVariables(path);
-        var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-        if (expanded == "~") {
-            return homeDir;
-        }
-
-        if (expanded.StartsWith("~/", StringComparison.Ordinal) ||
-            expanded.StartsWith("~\\", StringComparison.Ordinal)) {
-            var relativePath = expanded[2..]
-                .Replace('\\', Path.DirectorySeparatorChar)
-                .Replace('/', Path.DirectorySeparatorChar);
-            return Path.Combine(homeDir, relativePath);
-        }
-
-        return expanded;
-    }
-}
-
-public sealed class BrokerSettings {
-    public string? SocketPath { get; set; }
-    public string? PipeName { get; set; }
 }
 
 public sealed class AppSettings {
