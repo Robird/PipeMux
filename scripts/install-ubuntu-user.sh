@@ -107,6 +107,8 @@ socket_path = "~/.local/share/pipemux/broker.sock"
 
 # 示例：使用 PipeMux.Host 托管任意 DLL 中的入口
 # [apps.counter]
+# command = "pmux-host /absolute/path/to/MyApp.dll MyNamespace.DebugEntries.BuildCounter"
+# 如需显式路径，也可以写成：
 # command = "$INSTALL_ROOT/bin/host/PipeMux.Host /absolute/path/to/MyApp.dll MyNamespace.DebugEntries.BuildCounter"
 # auto_start = false
 # timeout = 30

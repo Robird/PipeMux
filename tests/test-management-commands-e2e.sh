@@ -100,6 +100,22 @@ start_broker
 echo "✅ Broker started (PID: $BROKER_PID)"
 echo ""
 
+echo "[2.5/8] Verifying onboarding hints for empty state..."
+initial_list_output="$(run_cli :list)"
+assert_contains "$initial_list_output" "(no apps registered)" "initial :list empty state"
+assert_contains "$initial_list_output" "First-time setup:" "initial :list onboarding header"
+assert_contains "$initial_list_output" "[apps.counter]" "initial :list config snippet"
+assert_contains "$initial_list_output" "MyNamespace.DebugEntries.BuildCounter" "initial :list entry hint"
+assert_contains "$initial_list_output" "pmux :register counter /absolute/path/to/MyApp.dll MyNamespace.DebugEntries.BuildCounter" "initial :list register hint"
+
+help_output="$(run_cli :help)"
+assert_contains "$help_output" "First-time setup:" ":help onboarding header"
+assert_contains "$help_output" "[apps.counter]" ":help config snippet"
+assert_contains "$help_output" "pmux :register counter /absolute/path/to/MyApp.dll" ":help register example"
+
+echo "✅ Empty-state onboarding is present"
+echo ""
+
 HOST_DLL="$ROOT_DIR/samples/HostDemo/bin/Debug/net10.0/HostDemo.dll"
 HOST_EXE="$ROOT_DIR/src/PipeMux.Host/bin/Debug/net10.0/PipeMux.Host"
 
@@ -168,7 +184,8 @@ echo ""
 
 echo "[8/8] Verifying post-unregister state..."
 final_list_output="$(run_cli :list)"
-assert_contains "$final_list_output" "(no applications registered)" "final :list"
+assert_contains "$final_list_output" "(no apps registered)" "final :list"
+assert_contains "$final_list_output" "First-time setup:" "final :list onboarding header"
 
 if final_invoke_output="$(run_cli counter inc 2>&1)"; then
     fail "invoke after unregister should have failed"

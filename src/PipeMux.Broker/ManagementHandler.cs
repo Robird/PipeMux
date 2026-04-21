@@ -1,4 +1,5 @@
 using System.Text;
+using PipeMux.Shared;
 using PipeMux.Shared.Protocol;
 
 namespace PipeMux.Broker;
@@ -39,12 +40,14 @@ public sealed class ManagementHandler {
     /// </summary>
     private Task<Response> HandleListAsync(Request request) {
         var sb = new StringBuilder();
-        sb.AppendLine("Registered applications:");
+        sb.AppendLine("Registered apps:");
         sb.AppendLine();
 
         var apps = _coordinator.SnapshotRegisteredApps();
         if (apps.Count == 0) {
-            sb.AppendLine("  (no applications registered)");
+            sb.AppendLine("  (no apps registered)");
+            sb.AppendLine();
+            AppendFirstTimeSetup(sb);
         }
         else {
             foreach (var (name, settings) in apps) {
@@ -69,6 +72,9 @@ public sealed class ManagementHandler {
         var activeProcesses = _coordinator.SnapshotActiveProcesses();
         if (activeProcesses.Count == 0) {
             sb.AppendLine("  (no running processes)");
+            sb.AppendLine();
+            sb.AppendLine("Hint:");
+            sb.AppendLine("  Run 'pmux :list' to inspect registered apps.");
         }
         else {
             foreach (var process in activeProcesses) {
@@ -86,7 +92,15 @@ public sealed class ManagementHandler {
     /// </summary>
     private Task<Response> HandleStopAsync(Request request, string? targetApp) {
         if (string.IsNullOrEmpty(targetApp)) {
-            return Task.FromResult(Response.Fail(request.RequestId, "Usage: pmux :stop <app-name>"));
+            return Task.FromResult(Response.Fail(
+                request.RequestId,
+                """
+                Usage: pmux :stop <app-name>
+                Example:
+                  pmux :stop calculator
+                Tip:
+                  Run 'pmux :ps' to see running processes first.
+                """.TrimEnd()));
         }
 
         return Task.FromResult(CreateOperationResponse(request.RequestId, _coordinator.StopApp(targetApp)));
@@ -116,7 +130,15 @@ public sealed class ManagementHandler {
     private Task<Response> HandleUnregisterAsync(Request request, ManagementCommand command) {
         var appName = command.TargetApp;
         if (string.IsNullOrWhiteSpace(appName)) {
-            return Task.FromResult(Response.Fail(request.RequestId, "Usage: pmux :unregister <app-name> [--stop]"));
+            return Task.FromResult(Response.Fail(
+                request.RequestId,
+                """
+                Usage: pmux :unregister <app-name> [--stop]
+                Example:
+                  pmux :unregister counter --stop
+                Tip:
+                  Add --stop if the app may still be running.
+                """.TrimEnd()));
         }
 
         return Task.FromResult(CreateOperationResponse(request.RequestId, _coordinator.UnregisterApp(appName, command.Flag)));
@@ -132,35 +154,94 @@ public sealed class ManagementHandler {
     /// :help - 显示帮助信息
     /// </summary>
     private Task<Response> HandleHelpAsync(Request request) {
-        var help = """
-            PipeMux Management Commands:
+        var sb = new StringBuilder();
+        sb.AppendLine("PipeMux Management Commands:");
+        sb.AppendLine();
+        sb.AppendLine("  :list          List registered apps");
+        sb.AppendLine("  :ps            List running processes");
+        sb.AppendLine("  :stop <app>    Stop processes for an application");
+        sb.AppendLine("  :register <app> <assembly> <entry> [--host-path <pmux-host-path>]");
+        sb.AppendLine("                 Register an app hosted by PipeMux.Host");
+        sb.AppendLine("  :unregister <app> [--stop]");
+        sb.AppendLine("                 Remove app from config (optionally stop running instances)");
+        sb.AppendLine("  :help          Show this help message");
+        sb.AppendLine();
+        AppendFirstTimeSetup(sb);
+        sb.AppendLine();
+        sb.AppendLine("Application Commands:");
+        sb.AppendLine();
+        sb.AppendLine("  pmux <app> <args...>    Call an application with arguments");
+        sb.AppendLine("  pmux calculator push 10");
+        sb.AppendLine("  pmux calculator add");
+        sb.AppendLine("  pmux texteditor open file.txt");
+        sb.AppendLine();
+        sb.AppendLine("Run 'pmux :list' to see current registered apps.");
 
-              :list          List registered applications
-              :ps            List running processes
-              :stop <app>    Stop processes for an application
-              :register <app> <assembly> <entry> [--host-path <pmux-host-path>]
-                             Register an app hosted by PipeMux.Host
-              :unregister <app> [--stop]
-                             Remove app from config (optionally stop running instances)
-              :help          Show this help message
+        return Task.FromResult(Response.Ok(request.RequestId, sb.ToString().TrimEnd()));
+    }
 
-            Application Commands:
+    private static void AppendFirstTimeSetup(StringBuilder sb) {
+        var configPath = BrokerConnectionDefaults.GetConfigPath();
+        var hostExecutableOnPath = IsCommandOnPath("pmux-host");
 
-              pmux <app> <args...>    Call an application with arguments
-              pmux calculator push 10
-              pmux calculator add
-              pmux texteditor open file.txt
+        sb.AppendLine("First-time setup:");
+        sb.AppendLine($"  1. Edit config: {configPath}");
+        sb.AppendLine("     Example:");
+        sb.AppendLine();
+        sb.AppendLine("     [apps.counter]");
+        sb.AppendLine($"     command = \"{GetConfigCommandExample(hostExecutableOnPath)}\"");
+        sb.AppendLine("     auto_start = false");
+        sb.AppendLine("     timeout = 30");
+        sb.AppendLine();
+        sb.AppendLine("  2. Or register an app now:");
+        sb.AppendLine($"     {GetRegisterCommandExample(hostExecutableOnPath)}");
+        if (hostExecutableOnPath) {
+            sb.AppendLine("     Tip: omit --host-path when pmux-host is already on PATH.");
+        }
+        else {
+            sb.AppendLine("     Tip: add --host-path when pmux-host is not on PATH.");
+        }
+        sb.AppendLine("  3. Run 'pmux :help' for the command index.");
+    }
 
-            Examples:
+    private static string GetConfigCommandExample(bool hostExecutableOnPath) {
+        const string assemblyPlaceholder = "/absolute/path/to/MyApp.dll";
+        const string entryPlaceholder = "MyNamespace.DebugEntries.BuildCounter";
 
-              pmux :list              # Show registered apps
-              pmux :ps                # Show running processes
-              pmux :stop calculator   # Stop calculator processes
-              pmux :register counter ./samples/HostDemo/bin/Debug/net10.0/HostDemo.dll HostDemo.DebugEntries.BuildCounter
-              pmux counter inc
-              pmux :unregister counter --stop
-            """;
+        return hostExecutableOnPath
+            ? $"pmux-host {assemblyPlaceholder} {entryPlaceholder}"
+            : $"/absolute/path/to/pmux-host {assemblyPlaceholder} {entryPlaceholder}";
+    }
 
-        return Task.FromResult(Response.Ok(request.RequestId, help.TrimEnd()));
+    private static string GetRegisterCommandExample(bool hostExecutableOnPath) {
+        const string appName = "counter";
+        const string assemblyPlaceholder = "/absolute/path/to/MyApp.dll";
+        const string entryPlaceholder = "MyNamespace.DebugEntries.BuildCounter";
+
+        return hostExecutableOnPath
+            ? $"pmux :register {appName} {assemblyPlaceholder} {entryPlaceholder}"
+            : $"pmux :register {appName} {assemblyPlaceholder} {entryPlaceholder} --host-path /absolute/path/to/pmux-host";
+    }
+
+    private static bool IsCommandOnPath(string commandName) {
+        var pathValue = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(pathValue)) {
+            return false;
+        }
+
+        string[] candidateFileNames = OperatingSystem.IsWindows()
+            ? [commandName, $"{commandName}.exe", $"{commandName}.cmd", $"{commandName}.bat"]
+            : [commandName];
+
+        foreach (var segment in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
+            foreach (var fileName in candidateFileNames) {
+                var candidatePath = Path.Combine(segment, fileName);
+                if (File.Exists(candidatePath)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }
