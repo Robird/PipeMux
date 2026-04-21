@@ -14,6 +14,42 @@ Broker and Front of Stateful CLI Apps
 
 ## 最新进展
 
+### System.CommandLine 升级到 2.0.6 (2026-04-21): beta4/beta5 → 稳定版 ✅
+- **目标**: 跟随 [migration-guide-2.0.0-beta5](https://learn.microsoft.com/en-us/dotnet/standard/commandline/migration-guide-2.0.0-beta5) 把整个仓库升级到当前最新稳定 `System.CommandLine 2.0.6`
+- **升级前状态**:
+  - `src/PipeMux.CLI` 仍停留在 `2.0.0-beta4.22272.1`，使用 `SetHandler(InvocationContext)` / `GetValueForArgument` / `AddArgument` 老 API
+  - `src/PipeMux.Sdk` 与 `samples/HostDemo` 已经升到 `2.0.0-beta5.25306.1`，但 `PipeMuxApp` 仍用 beta5/6 的 `CommandLineConfiguration`，beta7+ 已拆为 `ParserConfiguration` + `InvocationConfiguration`
+  - 各处 `parseResult.Configuration.Output/Error` 在新 API 下不再可用（`Configuration` 现在是 `ParserConfiguration`，无 Output/Error）
+- **修改**:
+  - 所有 `System.CommandLine` 包引用统一升到 `2.0.6`：
+    - `src/PipeMux.CLI/PipeMux.CLI.csproj`
+    - `src/PipeMux.Sdk/PipeMux.Sdk.csproj`
+    - `samples/HostDemo/HostDemo.csproj`
+  - `src/PipeMux.CLI/Program.cs`:
+    - 去掉 `using System.CommandLine.Invocation;`
+    - `Argument<T>(name, description)` → `new Argument<T>(name) { Description = ... }`
+    - `rootCommand.AddArgument(...)` → `rootCommand.Arguments.Add(...)`
+    - `SetHandler(async (InvocationContext ctx) => ...)` → `SetAction(async (ParseResult pr, CancellationToken ct) => { ...; return 0/1; })`，退出码改为直接 return
+    - `rootCommand.InvokeAsync(args)` → `rootCommand.Parse(args).InvokeAsync()`
+  - `src/PipeMux.Sdk/PipeMuxApp.cs`:
+    - `new CommandLineConfiguration(_rootCommand) { Output, Error }` → `new InvocationConfiguration { Output, Error }`
+    - `await config.InvokeAsync(args)` → `await _rootCommand.Parse(args).InvokeAsync(config)`
+  - `samples/HostDemo/DebugEntries.cs` / `samples/Calculator/Program.cs`:
+    - `ctx.Configuration.Output/Error` → `ctx.InvocationConfiguration.Output/Error`（适配 beta7+ 的 `ParseResult.Configuration` 已退化为 `ParserConfiguration`）
+- **验证**:
+  - `dotnet build PipeMux.sln --nologo` succeeded ✅（0 warning, 0 error）
+  - `bash tests/test-management-command-parse.sh` passed ✅（9 个 parser case）
+  - `bash tests/test-management-commands-e2e.sh` passed ✅（含 register/restart/list/invoke/unregister 完整闭环）
+- **API 关键差异（备忘）**:
+  - 命令/选项/参数的添加：旧 `AddArgument/AddOption/AddCommand` → 新 mutable 集合 `.Arguments.Add / .Options.Add / .Subcommands.Add`
+  - Argument/Option 描述：构造函数不再接受 description，改用初始化器 `{ Description = "..." }`
+  - 调用：`rootCommand.InvokeAsync(args)` 不再存在；改为 `rootCommand.Parse(args).InvokeAsync(invocationConfig?)`
+  - 输出重定向：`InvocationConfiguration.Output/Error`（不再走 `CommandLineConfiguration`）
+  - Action 内部访问输出：`parseResult.InvocationConfiguration.Output`（不是 `parseResult.Configuration.Output`）
+  - Async action 推荐签名：`(ParseResult, CancellationToken) => Task<int>`
+- **核对说明**:
+  - 按提示尝试核对 `docs/reports/migration-log.md` 与 `agent-team/indexes/README.md`，当前仓库内仍不存在，无法执行 changefeed delta 预检查
+
 ### 管理命令持久化闭环补测 (2026-04-21): Archimedes 建议合理，已在 `tests/` 内做最小补洞 ✅
 - **结论**:
   - Archimedes 提的缺口判断是合理的

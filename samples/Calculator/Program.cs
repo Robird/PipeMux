@@ -72,11 +72,11 @@ Command CreateValueCommand<T>(string name, string description, Argument<T> argum
 int Execute(ParseResult parseResult, Action action) {
     try {
         action();
-        parseResult.Configuration.Output.WriteLine(calculator.FormatStack());
+        parseResult.InvocationConfiguration.Output.WriteLine(calculator.FormatStack());
         return 0;
     }
     catch (Exception ex) when (ex is InvalidOperationException or DivideByZeroException) {
-        parseResult.Configuration.Error.WriteLine($"Error: {ex.Message}");
+        parseResult.InvocationConfiguration.Error.WriteLine($"Error: {ex.Message}");
         return 1;
     }
 }

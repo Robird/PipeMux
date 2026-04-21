@@ -24,27 +24,27 @@ public static class DebugEntries
         incCmd.SetAction(ctx =>
         {
             _count++;
-            ctx.Configuration.Output.WriteLine($"Counter: {_count}");
+            ctx.InvocationConfiguration.Output.WriteLine($"Counter: {_count}");
         });
 
         var decCmd = new Command("dec", "Decrement counter");
         decCmd.SetAction(ctx =>
         {
             _count--;
-            ctx.Configuration.Output.WriteLine($"Counter: {_count}");
+            ctx.InvocationConfiguration.Output.WriteLine($"Counter: {_count}");
         });
 
         var getCmd = new Command("get", "Get current value");
         getCmd.SetAction(ctx =>
         {
-            ctx.Configuration.Output.WriteLine($"Counter: {_count}");
+            ctx.InvocationConfiguration.Output.WriteLine($"Counter: {_count}");
         });
 
         var resetCmd = new Command("reset", "Reset counter to 0");
         resetCmd.SetAction(ctx =>
         {
             _count = 0;
-            ctx.Configuration.Output.WriteLine($"Counter: {_count}");
+            ctx.InvocationConfiguration.Output.WriteLine($"Counter: {_count}");
         });
 
         var addArg = new Argument<int>("value") { Description = "Value to add" };
@@ -52,7 +52,7 @@ public static class DebugEntries
         addCmd.SetAction(ctx =>
         {
             _count += ctx.GetValue(addArg);
-            ctx.Configuration.Output.WriteLine($"Counter: {_count}");
+            ctx.InvocationConfiguration.Output.WriteLine($"Counter: {_count}");
         });
 
         root.Add(incCmd);
@@ -81,7 +81,7 @@ public static class DebugEntries
             var name = ctx.GetValue(nameArg);
             var greeting = $"Hello, {name}!";
             greetings.Add(greeting);
-            ctx.Configuration.Output.WriteLine(greeting);
+            ctx.InvocationConfiguration.Output.WriteLine(greeting);
         });
 
         var historyCmd = new Command("history", "Show greeting history");
@@ -89,11 +89,11 @@ public static class DebugEntries
         {
             if (greetings.Count == 0)
             {
-                ctx.Configuration.Output.WriteLine("No greetings yet.");
+                ctx.InvocationConfiguration.Output.WriteLine("No greetings yet.");
                 return;
             }
             for (var i = 0; i < greetings.Count; i++)
-                ctx.Configuration.Output.WriteLine($"  {i + 1}. {greetings[i]}");
+                ctx.InvocationConfiguration.Output.WriteLine($"  {i + 1}. {greetings[i]}");
         });
 
         root.Add(helloCmd);

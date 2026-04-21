@@ -84,14 +84,14 @@ public class PipeMuxApp {
         var stderrWriter = new StringWriter();
 
         try {
-            // 创建配置，重定向输出
-            var config = new CommandLineConfiguration(_rootCommand) {
+            // 创建 invocation 配置，重定向输出
+            var config = new InvocationConfiguration {
                 Output = stdoutWriter,
                 Error = stderrWriter
             };
 
-            // 使用配置执行命令（自动解析并调用）
-            var exitCode = await config.InvokeAsync(args);
+            // 先 parse，再用 invocation 配置 invoke
+            var exitCode = await _rootCommand.Parse(args).InvokeAsync(config);
 
             return new InvokeResult {
                 ExitCode = exitCode,
