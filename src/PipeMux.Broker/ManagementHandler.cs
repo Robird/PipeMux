@@ -147,7 +147,8 @@ public sealed class ManagementHandler {
             Application Commands:
 
               pmux <app> <args...>    Call an application with arguments
-              pmux calculator add 10 20
+              pmux calculator push 10
+              pmux calculator add
               pmux texteditor open file.txt
 
             Examples:
@@ -156,6 +157,7 @@ public sealed class ManagementHandler {
               pmux :ps                # Show running processes
               pmux :stop calculator   # Stop calculator processes
               pmux :register counter ./samples/HostDemo/bin/Debug/net10.0/HostDemo.dll HostDemo.DebugEntries.BuildCounter
+              pmux counter inc
               pmux :unregister counter --stop
             """;
 

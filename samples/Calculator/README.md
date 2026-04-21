@@ -1,5 +1,10 @@
 # PipeMux Calculator Sample
 
+如果你还没有可用的 `pmux` 命令，先看仓库文档入口：
+
+- 已安装日常使用：[`../../docs/ubuntu-deployment.md`](../../docs/ubuntu-deployment.md)
+- 源码开发 / 调试：[`../../docs/pipemux-quickstart.md`](../../docs/pipemux-quickstart.md)
+
 这个示例展示的是当前 PipeMux 形态下的“有状态 CLI App”：
 
 - 应用代码使用 `PipeMux.Sdk` 暴露一个 `invoke(string[] args)` RPC 入口
@@ -35,7 +40,7 @@ dotnet run --project samples/Calculator
 
 ```toml
 [apps.calculator]
-command = "dotnet run --project /path/to/PipeMux/samples/Calculator"
+command = "dotnet run --project /path/to/PipeMux/samples/Calculator -c Debug"
 timeout = 30
 ```
 

@@ -44,9 +44,9 @@ public sealed class BrokerClient {
     /// 核心请求发送逻辑
     /// </summary>
     private async Task<Response> SendRequestCoreAsync(Request request) {
-        try {
-            var endpoint = BrokerEndpointResolver.Resolve();
+        var endpoint = BrokerEndpointResolver.Resolve();
 
+        try {
             return endpoint.Transport switch {
                 BrokerTransportKind.NamedPipe => await SendViaNamedPipeAsync(request, endpoint.Value),
                 BrokerTransportKind.UnixSocket => await SendViaUnixSocketAsync(request, endpoint.Value),
@@ -54,17 +54,17 @@ public sealed class BrokerClient {
             };
         }
         catch (TimeoutException) {
-            return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
+            return CreateConnectionFailure(request.RequestId, endpoint, "Connection timeout: Broker not responding");
         }
         catch (IOException ex) {
             // Named Pipe 不存在或 Broker 未运行
             if (ex.Message.Contains("pipe") || ex.Message.Contains("does not exist")) {
-                return Response.Fail(request.RequestId, $"Broker not running: {ex.Message}");
+                return CreateConnectionFailure(request.RequestId, endpoint, $"Broker not running: {ex.Message}");
             }
-            return Response.Fail(request.RequestId, $"Communication error: {ex.Message}");
+            return CreateConnectionFailure(request.RequestId, endpoint, $"Communication error: {ex.Message}");
         }
         catch (Exception ex) {
-            return Response.Fail(request.RequestId, $"Connection error: {ex.Message}");
+            return CreateConnectionFailure(request.RequestId, endpoint, $"Connection error: {ex.Message}");
         }
     }
 
@@ -98,10 +98,10 @@ public sealed class BrokerClient {
             await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cts.Token);
         }
         catch (SocketException ex) when (ex.SocketErrorCode is SocketError.AddressNotAvailable or SocketError.HostNotFound or SocketError.ConnectionRefused or SocketError.NotConnected) {
-            return Response.Fail(request.RequestId, $"Broker not running: {ex.Message}");
+            return CreateConnectionFailure(request.RequestId, new BrokerEndpoint(BrokerTransportKind.UnixSocket, socketPath), $"Broker not running: {ex.Message}");
         }
         catch (OperationCanceledException) {
-            return Response.Fail(request.RequestId, "Connection timeout: Broker not responding");
+            return CreateConnectionFailure(request.RequestId, new BrokerEndpoint(BrokerTransportKind.UnixSocket, socketPath), "Connection timeout: Broker not responding");
         }
 
         using var stream = new NetworkStream(socket, ownsSocket: false);
@@ -122,5 +122,17 @@ public sealed class BrokerClient {
 
         var response = JsonRpc.DeserializeResponse(responseJson);
         return response ?? Response.Fail(request.RequestId, "Invalid response from broker");
+    }
+
+    private static Response CreateConnectionFailure(string requestId, BrokerEndpoint endpoint, string detail) {
+        var endpointDescription = endpoint.Transport switch {
+            BrokerTransportKind.UnixSocket => $"unix socket '{endpoint.Value}'",
+            BrokerTransportKind.NamedPipe => $"named pipe '{endpoint.Value}'",
+            _ => endpoint.Value
+        };
+
+        var configPath = BrokerConnectionDefaults.GetConfigPath();
+        var hint = $"endpoint={endpointDescription}; config={configPath}; try 'systemctl --user restart pipemux-broker' or verify broker.toml";
+        return Response.Fail(requestId, $"{detail} ({hint})");
     }
 }

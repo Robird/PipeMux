@@ -1,5 +1,9 @@
 # Ubuntu 部署说明
 
+这份文档面向“当前机器已经准备作为 PipeMux 的稳定使用环境，命令入口以 `pmux` / `pmux-host` 为主”的场景。
+
+如果你正在修改源码、排查 Broker/CLI/sample 的行为，并且希望直接从仓库里用 `dotnet run --project ...` 调试，请改看 [`pipemux-quickstart.md`](pipemux-quickstart.md)。
+
 本文面向当前仓库里的三个 .NET CLI/服务：
 
 - `src/PipeMux.CLI`
@@ -38,7 +42,7 @@
 
 ## 两种部署方式
 
-### 方式 1：依赖目标机已安装 .NET 9 Runtime
+### 方式 1：依赖目标机已安装 .NET 10 Runtime
 
 优点是产物更小，推荐开发机和服务器都能稳定安装 .NET 的场景。
 
@@ -95,7 +99,7 @@ auto_start = false
 timeout = 30
 
 [apps.counter]
-command = "~/.local/share/pipemux/bin/host/PipeMux.Host /path/to/HostDemo.dll HostDemo.DebugEntries.BuildCounter"
+command = "pmux-host /path/to/HostDemo.dll HostDemo.DebugEntries.BuildCounter"
 auto_start = false
 timeout = 30
 ```
@@ -170,7 +174,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ```toml
 [apps.greeter]
-command = "~/.local/share/pipemux/bin/host/PipeMux.Host /opt/myapps/HostDemo.dll HostDemo.DebugEntries.BuildGreeter"
+command = "pmux-host /opt/myapps/HostDemo.dll HostDemo.DebugEntries.BuildGreeter"
 auto_start = false
 timeout = 30
 ```

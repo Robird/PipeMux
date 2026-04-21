@@ -214,7 +214,7 @@ $ pipemux texteditor render
 ## 技术选型
 
 ### 开发环境
-- **.NET 9.0**: 现代 C#、跨平台、高性能
+- **.NET 10.0**: 现代 C#、跨平台、高性能
 - **xUnit**: 单元测试
 - **System.IO.Pipelines**: 高效 I/O（后续流式输出）
 

@@ -66,6 +66,29 @@ EOF
     chmod +x "$target_path"
 }
 
+write_cli_wrapper() {
+    local target_path="$1"
+    local exec_path="$2"
+
+    cat > "$target_path" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+SERVICE_NAME="pipemux-broker.service"
+
+if [[ "\${PIPEMUX_NO_AUTOSTART:-0}" != "1" ]] && command -v systemctl >/dev/null 2>&1; then
+    if systemctl --user --quiet is-enabled "\$SERVICE_NAME" 2>/dev/null || systemctl --user --quiet is-active "\$SERVICE_NAME" 2>/dev/null; then
+        if ! systemctl --user --quiet is-active "\$SERVICE_NAME" 2>/dev/null; then
+            systemctl --user start "\$SERVICE_NAME" >/dev/null 2>&1 || true
+        fi
+    fi
+fi
+
+exec "$exec_path" "\$@"
+EOF
+    chmod +x "$target_path"
+}
+
 write_default_config_if_missing() {
     local config_path="$CONFIG_DIR/broker.toml"
     if [[ -f "$config_path" ]]; then
@@ -115,7 +138,7 @@ sync_dir "$stage_dir/broker" "$INSTALL_ROOT/bin/broker"
 sync_dir "$stage_dir/cli" "$INSTALL_ROOT/bin/cli"
 sync_dir "$stage_dir/host" "$INSTALL_ROOT/bin/host"
 
-write_wrapper "$BIN_DIR/pmux" "$INSTALL_ROOT/bin/cli/PipeMux.CLI"
+write_cli_wrapper "$BIN_DIR/pmux" "$INSTALL_ROOT/bin/cli/PipeMux.CLI"
 write_wrapper "$BIN_DIR/pmux-host" "$INSTALL_ROOT/bin/host/PipeMux.Host"
 
 write_default_config_if_missing

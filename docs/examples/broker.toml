@@ -1,4 +1,12 @@
 # PipeMux Broker 配置示例
+#
+# 这份示例偏向“源码开发 / 调试”工作流：
+# - Broker 和 CLI 由 `dotnet run --project ...` 启动
+# - sample app 直接指向当前仓库里的源码项目
+#
+# 如果你已经执行过 `scripts/install-ubuntu-user.sh`，
+# 并希望把当前机器作为稳定的日常使用环境，请优先参考：
+# docs/ubuntu-deployment.md
 
 [broker]
 # Linux/Ubuntu: 推荐使用 Unix Domain Socket
@@ -9,18 +17,19 @@ socket_path = "~/.local/share/pipemux/broker.sock"
 
 # 注册的应用程序
 [apps.calculator]
-command = "dotnet run --project /repos/focus/PipeMux/samples/Calculator"
+command = "dotnet run --project /path/to/PipeMux/samples/Calculator -c Debug"
 auto_start = false
 timeout = 30
 
-# 使用 PipeMux.Host 加载任意 DLL 中的调试入口
+# 安装工作流下，通常会直接使用 PATH 里的 `pmux-host`
+# 来加载你自己的 DLL：
 # [apps.counter]
-# command = "/path/to/PipeMux.Host /path/to/MyLib.dll MyNamespace.DebugEntries.BuildCounter"
+# command = "pmux-host /absolute/path/to/MyLib.dll MyNamespace.DebugEntries.BuildCounter"
 # auto_start = false
 # timeout = 30
 
-# 示例: 未来的调试器应用
-# [apps.debugger]
-# command = "/path/to/PipeMux.Debugger"
+# 源码调试 `samples/HostDemo` 时，也可以显式指向仓库里的 Debug 产物：
+# [apps.counter]
+# command = "/path/to/PipeMux/src/PipeMux.Host/bin/Debug/net10.0/PipeMux.Host /path/to/PipeMux/samples/HostDemo/bin/Debug/net10.0/HostDemo.dll HostDemo.DebugEntries.BuildCounter"
 # auto_start = false
-# timeout = 60
+# timeout = 30
