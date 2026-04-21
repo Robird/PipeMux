@@ -10,9 +10,50 @@ namespace PipeMux.Broker;
 /// </summary>
 public sealed class HostRegistrationRequest {
     private const string DefaultHostExecutable = "pmux-host";
+    private const string ConfigCommandFallbackHost = "/absolute/path/to/PipeMux.Host";
 
     public required string AppName { get; init; }
     public required AppSettings Settings { get; init; }
+
+    /// <summary>
+    /// 统一描述 broker 当前环境下对 PipeMux.Host 的发现结果。
+    /// 同时服务于 :register 默认解析与 :help / :list 的 first-time setup 文案。
+    /// </summary>
+    public static HostExecutableResolution ResolveHostExecutable() {
+        var bundledPath = GetExpectedBundledHostPath();
+        if (bundledPath != null && File.Exists(bundledPath)) {
+            return new HostExecutableResolution {
+                Source = HostExecutableSource.Bundled,
+                ResolvedPath = bundledPath,
+                SuggestedConfigCommandHost = bundledPath,
+                Error = string.Empty
+            };
+        }
+
+        var pathExecutable = PathHelper.TryFindOnPath(DefaultHostExecutable);
+        if (pathExecutable != null) {
+            return new HostExecutableResolution {
+                Source = HostExecutableSource.Path,
+                ResolvedPath = pathExecutable,
+                SuggestedConfigCommandHost = DefaultHostExecutable,
+                Error = string.Empty
+            };
+        }
+
+        var attempted = string.Join(
+            "; ",
+            new[] { bundledPath, $"PATH lookup for '{DefaultHostExecutable}'" }
+                .Where(static value => !string.IsNullOrEmpty(value)));
+
+        return new HostExecutableResolution {
+            Source = HostExecutableSource.NotFound,
+            ResolvedPath = null,
+            SuggestedConfigCommandHost = ConfigCommandFallbackHost,
+            Error = $"Could not locate {DefaultHostExecutable}. Tried: {attempted}. "
+                  + "Pass --host-path </absolute/path/to/PipeMux.Host> to :register, "
+                  + "or install via scripts/install-ubuntu-user.sh."
+        };
+    }
 
     public static bool TryCreate(ManagementCommand command, [NotNullWhen(true)] out HostRegistrationRequest? registration, out string error) {
         registration = null;
@@ -29,14 +70,20 @@ public sealed class HostRegistrationRequest {
             return false;
         }
 
-        var normalizedHostPath = string.IsNullOrWhiteSpace(command.HostPath)
-            ? DefaultHostExecutable
-            : NormalizeRequiredFile(
+        string? normalizedHostPath;
+        if (!string.IsNullOrWhiteSpace(command.HostPath)) {
+            normalizedHostPath = NormalizeRequiredFile(
                 command.HostPath,
                 "Host executable not found",
                 requirePathLikeInput: true,
                 out error
             );
+        }
+        else {
+            var resolution = ResolveHostExecutable();
+            normalizedHostPath = resolution.ResolvedPath;
+            error = resolution.Error;
+        }
 
         if (normalizedHostPath == null) {
             return false;
@@ -53,6 +100,22 @@ public sealed class HostRegistrationRequest {
 
         error = string.Empty;
         return true;
+    }
+
+    private static string? GetExpectedBundledHostPath() {
+        // broker 自身位于 .../bin/broker/PipeMux.Broker；同布局下 host 在 .../bin/host/PipeMux.Host
+        var brokerDir = AppContext.BaseDirectory;
+        if (string.IsNullOrEmpty(brokerDir)) {
+            return null;
+        }
+
+        var bundleRoot = Path.GetDirectoryName(brokerDir.TrimEnd(Path.DirectorySeparatorChar));
+        if (string.IsNullOrEmpty(bundleRoot)) {
+            return null;
+        }
+
+        var executableName = OperatingSystem.IsWindows() ? "PipeMux.Host.exe" : "PipeMux.Host";
+        return Path.Combine(bundleRoot, "host", executableName);
     }
 
     private static string? NormalizeRequiredFile(
@@ -95,4 +158,19 @@ public sealed class HostRegistrationRequest {
     private static string EscapeArgument(string value) {
         return $"\"{value.Replace("\"", "\\\"")}\"";
     }
+}
+
+public enum HostExecutableSource {
+    NotFound,
+    Bundled,
+    Path
+}
+
+public sealed class HostExecutableResolution {
+    public required HostExecutableSource Source { get; init; }
+    public required string? ResolvedPath { get; init; }
+    public required string SuggestedConfigCommandHost { get; init; }
+    public required string Error { get; init; }
+
+    public bool CanAutoResolveForRegister => ResolvedPath != null;
 }

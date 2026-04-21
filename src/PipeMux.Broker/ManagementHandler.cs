@@ -117,6 +117,13 @@ public sealed class ManagementHandler {
     /// :register - 注册一个由 PipeMux.Host 托管的 app
     /// </summary>
     private Task<Response> HandleRegisterAsync(Request request, ManagementCommand command) {
+        if (!string.IsNullOrWhiteSpace(command.TargetApp)
+            && !string.IsNullOrWhiteSpace(command.TargetAssemblyPath)
+            && !string.IsNullOrWhiteSpace(command.TargetMethodName)
+            && _coordinator.TryGetRegisterConflict(command.TargetApp, out var conflict)) {
+            return Task.FromResult(CreateOperationResponse(request.RequestId, conflict));
+        }
+
         if (!HostRegistrationRequest.TryCreate(command, out var registration, out var error)) {
             return Task.FromResult(Response.Fail(request.RequestId, error));
         }
@@ -182,66 +189,42 @@ public sealed class ManagementHandler {
 
     private static void AppendFirstTimeSetup(StringBuilder sb) {
         var configPath = BrokerConnectionDefaults.GetConfigPath();
-        var hostExecutableOnPath = IsCommandOnPath("pmux-host");
+        var hostResolution = HostRegistrationRequest.ResolveHostExecutable();
 
         sb.AppendLine("First-time setup:");
         sb.AppendLine($"  1. Edit config: {configPath}");
         sb.AppendLine("     Example:");
         sb.AppendLine();
         sb.AppendLine("     [apps.counter]");
-        sb.AppendLine($"     command = \"{GetConfigCommandExample(hostExecutableOnPath)}\"");
+        sb.AppendLine($"     command = \"{GetConfigCommandExample(hostResolution.SuggestedConfigCommandHost)}\"");
         sb.AppendLine("     auto_start = false");
         sb.AppendLine("     timeout = 30");
         sb.AppendLine();
         sb.AppendLine("  2. Or register an app now:");
-        sb.AppendLine($"     {GetRegisterCommandExample(hostExecutableOnPath)}");
-        if (hostExecutableOnPath) {
-            sb.AppendLine("     Tip: omit --host-path when pmux-host is already on PATH.");
+        sb.AppendLine($"     {GetRegisterCommandExample(hostResolution.CanAutoResolveForRegister)}");
+        if (hostResolution.CanAutoResolveForRegister) {
+            sb.AppendLine("     Tip: --host-path is auto-resolved for :register; only pass it for a custom location.");
         }
         else {
-            sb.AppendLine("     Tip: add --host-path when pmux-host is not on PATH.");
+            sb.AppendLine("     Tip: pass --host-path to point at your PipeMux.Host build.");
         }
         sb.AppendLine("  3. Run 'pmux :help' for the command index.");
     }
 
-    private static string GetConfigCommandExample(bool hostExecutableOnPath) {
+    private static string GetConfigCommandExample(string hostExecutable) {
         const string assemblyPlaceholder = "/absolute/path/to/MyApp.dll";
         const string entryPlaceholder = "MyNamespace.DebugEntries.BuildCounter";
 
-        return hostExecutableOnPath
-            ? $"pmux-host {assemblyPlaceholder} {entryPlaceholder}"
-            : $"/absolute/path/to/pmux-host {assemblyPlaceholder} {entryPlaceholder}";
+        return $"{hostExecutable} {assemblyPlaceholder} {entryPlaceholder}";
     }
 
-    private static string GetRegisterCommandExample(bool hostExecutableOnPath) {
+    private static string GetRegisterCommandExample(bool canRegisterWithoutHostPath) {
         const string appName = "counter";
         const string assemblyPlaceholder = "/absolute/path/to/MyApp.dll";
         const string entryPlaceholder = "MyNamespace.DebugEntries.BuildCounter";
 
-        return hostExecutableOnPath
+        return canRegisterWithoutHostPath
             ? $"pmux :register {appName} {assemblyPlaceholder} {entryPlaceholder}"
             : $"pmux :register {appName} {assemblyPlaceholder} {entryPlaceholder} --host-path /absolute/path/to/pmux-host";
-    }
-
-    private static bool IsCommandOnPath(string commandName) {
-        var pathValue = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(pathValue)) {
-            return false;
-        }
-
-        string[] candidateFileNames = OperatingSystem.IsWindows()
-            ? [commandName, $"{commandName}.exe", $"{commandName}.cmd", $"{commandName}.bat"]
-            : [commandName];
-
-        foreach (var segment in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
-            foreach (var fileName in candidateFileNames) {
-                var candidatePath = Path.Combine(segment, fileName);
-                if (File.Exists(candidatePath)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 }

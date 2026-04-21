@@ -100,9 +100,21 @@ public sealed class BrokerCoordinator {
 
     public BrokerOperationResult RegisterApp(string appName, AppSettings settings) {
         lock (_brokerGate) {
-            return _configStore.TryRegisterApp(appName, settings, out var message)
-                ? BrokerOperationResult.Ok(message)
-                : BrokerOperationResult.Fail(message);
+            if (TryGetRegisterConflict_NoLock(appName, out var conflict)) {
+                return conflict;
+            }
+
+            if (!_configStore.TryRegisterApp(appName, settings, out var message)) {
+                return BrokerOperationResult.Fail(message);
+            }
+
+            return BrokerOperationResult.Ok(message);
+        }
+    }
+
+    public bool TryGetRegisterConflict(string appName, out BrokerOperationResult conflict) {
+        lock (_brokerGate) {
+            return TryGetRegisterConflict_NoLock(appName, out conflict);
         }
     }
 
@@ -165,6 +177,26 @@ public sealed class BrokerCoordinator {
         return _registry.ListActive()
             .Where(key => key == appName || key.StartsWith($"{appName}:", StringComparison.Ordinal))
             .ToList();
+    }
+
+    private bool TryGetRegisterConflict_NoLock(string appName, out BrokerOperationResult conflict) {
+        if (!_configStore.Apps.ContainsKey(appName)) {
+            conflict = null!;
+            return false;
+        }
+
+        var runningKeys = FindMatchingKeys(appName);
+        var hint = "App already registered: " + appName;
+        if (runningKeys.Count > 0) {
+            hint += $"\n- If you rebuilt the DLL and want the new code loaded, run: pmux :stop {appName}";
+            hint += $"\n- To change registration (different assembly/entry/host), first run: pmux :unregister {appName} --stop";
+        }
+        else {
+            hint += $"\n- To change registration, first run: pmux :unregister {appName}";
+        }
+
+        conflict = BrokerOperationResult.Fail(hint);
+        return true;
     }
 
     private static string BuildProcessKey(string appName, string? terminalId) {

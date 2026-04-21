@@ -22,4 +22,30 @@ public static class PathHelper {
 
         return expanded;
     }
+
+    /// <summary>
+    /// 在系统 PATH 中查找可执行文件；找到则返回绝对路径，否则返回 null。
+    /// Windows 下会附带尝试常见可执行扩展名（.exe/.cmd/.bat）。
+    /// </summary>
+    public static string? TryFindOnPath(string commandName) {
+        var pathValue = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(pathValue)) {
+            return null;
+        }
+
+        string[] candidateFileNames = OperatingSystem.IsWindows()
+            ? [commandName, $"{commandName}.exe", $"{commandName}.cmd", $"{commandName}.bat"]
+            : [commandName];
+
+        foreach (var segment in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
+            foreach (var fileName in candidateFileNames) {
+                var candidatePath = Path.Combine(segment, fileName);
+                if (File.Exists(candidatePath)) {
+                    return Path.GetFullPath(candidatePath);
+                }
+            }
+        }
+
+        return null;
+    }
 }

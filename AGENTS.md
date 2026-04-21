@@ -86,6 +86,13 @@ Broker and Front of Stateful CLI Apps —— 通过 Named Pipe / Unix Domain Soc
 
 ## 最新进展（最多保留 3 条）
 
+### 2026-04-22 — `:register` 自动定位 pmux-host + re-register 引导 ✅
+- `HostRegistrationRequest` 在用户未传 `--host-path` 时按 `<broker_dir>/../host/PipeMux.Host` → PATH 中 `pmux-host` 的顺序探测，找到即用绝对路径写入 broker.toml。**这同时解决了"systemd user service 默认 PATH 不含 ~/.local/bin"的运行期解析问题**——broker.toml 里就是绝对路径，子进程启动不再依赖 PATH。
+- `BrokerCoordinator.RegisterApp` 对"app 已存在"的拒绝消息升级为两条可执行引导：`pmux :stop <app>`（仅重建 DLL）vs `pmux :unregister <app> --stop`（要换 assembly/entry）。
+- `:help` / `:list` first-time setup 现在把两件事分开：`:register` 是否可省略 `--host-path`，以及 broker.toml 示例是否可安全写裸 `pmux-host`。**只有 broker 自身 PATH 真能解析 `pmux-host` 时，配置示例才会显示裸命令；否则显示 broker 可直接执行的绝对路径。**
+- `PathHelper.TryFindOnPath` 抽出共用，`ManagementHandler` 内重复 PATH 扫描代码删除。
+- 验证：parser 9/9，E2E 含新断言 8/8；覆盖"无 `--host-path` 注册、broker.toml 持久化绝对路径、移除 PATH 提示后重启仍可调用"。
+
 ### 2026-04-21 — System.CommandLine 升级到 2.0.6 ✅
 - 全仓 `System.CommandLine` 包统一升到 `2.0.6`（CLI 之前还停留在 beta4，Sdk/HostDemo 在 beta5）。
 - 按 [beta5+ migration guide](https://learn.microsoft.com/en-us/dotnet/standard/commandline/migration-guide-2.0.0-beta5) 完成 API 迁移：`SetHandler/InvocationContext/AddArgument` → `SetAction/ParseResult/Arguments.Add`；`CommandLineConfiguration` → `InvocationConfiguration`；`parseResult.Configuration.Output` → `parseResult.InvocationConfiguration.Output`。

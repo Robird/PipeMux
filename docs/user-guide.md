@@ -29,7 +29,9 @@ pmux :register counter \
   HostDemo.DebugEntries.BuildCounter
 ```
 
-不确定 `pmux-host` 在不在 PATH？直接跑 `pmux :help`——它会按你机器的 PATH 给出可直接照抄的 `:register` 行（需要时附 `--host-path`）。
+按官方脚本装好的环境无需指定 `pmux-host` 位置——broker 会自动用安装目录里的版本。如果你把 `pmux-host` 放到了别处，加 `--host-path /absolute/path/to/pmux-host` 即可。
+
+如果你是手写 `broker.toml`，优先写 `PipeMux.Host` 的绝对路径，不要假设 broker 服务启动时一定能从 PATH 找到 `pmux-host`。
 
 调用：
 
@@ -51,7 +53,7 @@ pmux counter get      # Counter: 2
 | 注销 app（可选同时 `--stop`） | `pmux :unregister <name> --stop` |
 | 看完整命令清单 | `pmux :help` |
 
-注意：`pmux :list` 与 `pmux :help` 的输出会内嵌"First-time setup"引导（包含针对你当前 PATH 的精确示例），LLM Agent 可直接据此自驱动。
+注意：`pmux :list` 与 `pmux :help` 的输出会内嵌"First-time setup"引导（包含针对当前环境的精确示例），LLM Agent 可直接据此自驱动。
 
 ## 4. 多终端隔离
 
@@ -75,6 +77,8 @@ pmux counter get
 | 调用 app 一直挂起或失败 | `systemctl --user status pipemux-broker` 是否 `active` |
 | Broker 起不来 / 不响应 | `journalctl --user -u pipemux-broker -n 100` 看错误 |
 | 提示 app 未注册 | `pmux :list` 确认；必要时 `pmux :register ...` |
+| 改了 DLL 代码但行为没变 | 后台进程仍在跑旧版本，`pmux :stop <app>` 后下次调用即加载新代码 |
+| `:register` 报 "App already registered" | 错误消息已经给了下一步命令，按提示走 |
 | 想完全重置 broker 状态 | `systemctl --user restart pipemux-broker` |
 
 ## 进一步

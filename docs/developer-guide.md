@@ -87,7 +87,7 @@ dotnet run --project src/PipeMux.CLI -c Debug -- counter get
 dotnet run --project src/PipeMux.CLI -c Debug -- :unregister counter --stop
 ```
 
-这条命令链适合调试“Host 是否正确找到 DLL / 入口方法 / 依赖”的问题。安装工作流下通常不需要传 `--host-path`，因为 `pmux-host` 会在 PATH 中。
+这条命令链适合调试“Host 是否正确找到 DLL / 入口方法 / 依赖”的问题。安装工作流下通常不需要传 `--host-path`，因为 broker 会自动解析安装目录里的 `PipeMux.Host`；如果你的环境是自定义布局，也可以依赖 PATH 里的 `pmux-host`。
 
 ## 6. 终端隔离调试
 

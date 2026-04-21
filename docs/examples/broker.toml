@@ -21,10 +21,10 @@ command = "dotnet run --project /path/to/PipeMux/samples/Calculator -c Debug"
 auto_start = false
 timeout = 30
 
-# 安装工作流下，通常会直接使用 PATH 里的 `pmux-host`
-# 来加载你自己的 DLL：
+# 安装工作流下，更稳妥的是直接写 broker 能稳定执行到的
+# `PipeMux.Host` 绝对路径；`:register` 也会自动帮你解析并保存绝对路径：
 # [apps.counter]
-# command = "pmux-host /absolute/path/to/MyLib.dll MyNamespace.DebugEntries.BuildCounter"
+# command = "/absolute/path/to/PipeMux.Host /absolute/path/to/MyLib.dll MyNamespace.DebugEntries.BuildCounter"
 # auto_start = false
 # timeout = 30
 

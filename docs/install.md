@@ -56,10 +56,12 @@ auto_start = false
 timeout = 30
 
 [apps.counter]
-command = "pmux-host /path/to/HostDemo.dll HostDemo.DebugEntries.BuildCounter"
+command = "/absolute/path/to/PipeMux.Host /path/to/HostDemo.dll HostDemo.DebugEntries.BuildCounter"
 auto_start = false
 timeout = 30
 ```
+
+对 `broker.toml` 里的 `command`，推荐直接写 `PipeMux.Host` 的绝对路径。原因是 broker 常常由 `systemd --user` 拉起，它继承到的 PATH 可能不包含 `~/.local/bin`；而 `pmux :register` 会自动解析并保存一个 broker 实际可执行到的绝对路径。
 
 如需临时覆盖连接方式，可设置环境变量：
 
@@ -130,7 +132,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ```toml
 [apps.greeter]
-command = "pmux-host /opt/myapps/HostDemo.dll HostDemo.DebugEntries.BuildGreeter"
+command = "/absolute/path/to/PipeMux.Host /opt/myapps/HostDemo.dll HostDemo.DebugEntries.BuildGreeter"
 auto_start = false
 timeout = 30
 ```
