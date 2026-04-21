@@ -155,7 +155,7 @@ public sealed class ManagementHandler {
               pmux :list              # Show registered apps
               pmux :ps                # Show running processes
               pmux :stop calculator   # Stop calculator processes
-              pmux :register counter ./samples/HostDemo/bin/Debug/net9.0/HostDemo.dll HostDemo.DebugEntries.BuildCounter
+              pmux :register counter ./samples/HostDemo/bin/Debug/net10.0/HostDemo.dll HostDemo.DebugEntries.BuildCounter
               pmux :unregister counter --stop
             """;
 

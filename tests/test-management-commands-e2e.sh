@@ -20,8 +20,8 @@ export HOME="$TEST_HOME"
 export DOTNET_CLI_HOME="$TEST_HOME"
 export PIPEMUX_SOCKET_PATH="$SOCKET_PATH"
 
-BROKER_BIN="$ROOT_DIR/src/PipeMux.Broker/bin/Debug/net9.0/PipeMux.Broker"
-CLI_BIN="$ROOT_DIR/src/PipeMux.CLI/bin/Debug/net9.0/PipeMux.CLI"
+BROKER_BIN="$ROOT_DIR/src/PipeMux.Broker/bin/Debug/net10.0/PipeMux.Broker"
+CLI_BIN="$ROOT_DIR/src/PipeMux.CLI/bin/Debug/net10.0/PipeMux.CLI"
 
 cleanup() {
     stop_broker >/dev/null 2>&1 || true
@@ -100,8 +100,8 @@ start_broker
 echo "✅ Broker started (PID: $BROKER_PID)"
 echo ""
 
-HOST_DLL="$ROOT_DIR/samples/HostDemo/bin/Debug/net9.0/HostDemo.dll"
-HOST_EXE="$ROOT_DIR/src/PipeMux.Host/bin/Debug/net9.0/PipeMux.Host"
+HOST_DLL="$ROOT_DIR/samples/HostDemo/bin/Debug/net10.0/HostDemo.dll"
+HOST_EXE="$ROOT_DIR/src/PipeMux.Host/bin/Debug/net10.0/PipeMux.Host"
 
 echo "[3/8] Registering PipeMux.Host-managed app..."
 register_output="$(run_cli :register counter "$HOST_DLL" HostDemo.DebugEntries.BuildCounter --host-path "$HOST_EXE")"

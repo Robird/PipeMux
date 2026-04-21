@@ -113,7 +113,7 @@ autostart = true
 timeout = 30  # 秒，无活动自动关闭
 
 [apps.debugger]
-command = "~/dev/PipeMux.Debugger/bin/Debug/net9.0/PipeMux.Debugger"
+command = "~/dev/PipeMux.Debugger/bin/Debug/net10.0/PipeMux.Debugger"
 autostart = false
 ```
 
