@@ -26,7 +26,7 @@ src/
 - Broker/CLI 端到端通信
 - Unix socket 与 named pipe 双传输
 - 后台进程复用、超时与健康检查
-- 管理命令 `:list` `:ps` `:stop` `:help`
+- 管理命令 `:list` `:ps` `:stop` `:register` `:unregister` `:help`
 - `PipeMux.Host` 动态加载 DLL 中的 `RootCommand` 入口
 
 ## 相关文档

@@ -6,7 +6,8 @@ var config = ConfigLoader.Load();
 Console.Error.WriteLine($"[INFO] Loaded config: {config.Apps.Count} apps registered");
 
 var registry = new ProcessRegistry();
-var broker = new BrokerServer(config, registry);
+var coordinator = new BrokerCoordinator(config, registry);
+var broker = new BrokerServer(config.Broker, coordinator);
 
 Console.Error.WriteLine("[INFO] Press Ctrl+C to stop");
 

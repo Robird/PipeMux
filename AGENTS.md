@@ -14,6 +14,116 @@ Broker and Front of Stateful CLI Apps
 
 ## 最新进展
 
+### 第二轮化简落地 (2026-04-21): 端点对称 + 锁集中 + 去冷启动 sleep + 测试提速 ✅
+- **背景**: 上一轮代码审阅后续修复完成后再做一轮“小而稳”的化简，按收益排序合并实施
+- **修复 / 化简**:
+  - **S5 端点解析对称化**: `BrokerConnectionResolver.ResolveServerEndpoint` 现在也优先读 `PIPEMUX_SOCKET_PATH` / `PIPEMUX_PIPE_NAME`，与 `ResolveClientEndpoint` 完全对称；不必改 toml 即可注入路径，同时绕开 apphost 在隔离 HOME 下 `LocalApplicationData` 解析为空的怪行为
+  - **S4 测试脚本改用 binary**: `tests/test-management-commands-e2e.sh` 不再走 `dotnet run`，broker/cli 都直接执行构建产物，脚本运行时间从约 1 分钟降到约 15 秒；BROKER_PID 即 broker 自身，cleanup 不再需要 `pkill -P` 兜底
+  - **S3 去掉冷启动 sleep**: `BrokerServer.HandleRequestAsync` 删掉 `await Task.Delay(100)`，冷启动等待交由 StreamJsonRpc + `settings.Timeout` 兜底；每次首请求节省 100 ms
+  - **S1 锁集中到 Coordinator**: `BrokerConfigStore` 不再自带 `_brokerGate`，所有锁集中由 `BrokerCoordinator` 持有；`Store` 退化为纯 “内存视图 + 原子落盘”，对外暴露 `IReadOnlyDictionary<string, AppSettings> Apps`，`Coordinator` 在 gate 内访问；顺手删除未使用的 `BrokerConfigStore.TryGetApp`
+- **验证**:
+  - `dotnet build PipeMux.sln` succeeded ✅ (0 warning, 0 error)
+  - `bash tests/test-management-commands-e2e.sh` passed，约 15s，零进程/临时目录残留 ✅
+- **未做的事**:
+  - `ProcessAcquisitionResult` / `BrokerOperationResult` 改 record struct 的“美化型”优化本轮未做；当前形态已可读，无并发/正确性收益
+  - `ConfigLoader` 与 `BrokerConfigStore` 共享 TOML codec 暂未提取，等下次新增 codec 行为再合并
+
+### 代码审阅后续修复 (2026-04-21): 测试清理 + 解析鲁棒性 + 错误回收语义 ✅
+- **背景**: 上一轮“管理命令后续化简”落地后审阅发现 4 个问题，本轮逐一修复
+- **修复**:
+  - `tests/test-management-commands-e2e.sh` 新增 `trap cleanup EXIT INT TERM`，且 cleanup 内 `pkill -P $BROKER_PID` 先回收 `dotnet run` 包装进程的 broker 子进程，再 kill 包装进程本身，杜绝失败/异常路径的进程与临时目录泄漏
+  - `src/PipeMux.Shared/Protocol/ManagementCommand.cs` 重写参数解析为 “两遍法”：先抽走声明的 `--name value` 与 `--flag`，剩余 token 才作为位置参数；任何未声明的 `--xxx` 直接判失败而非无声吞掉。`:register --host-path /x app dll method` 与 `:unregister --stop app` 任意顺序均能正确解析
+  - `src/PipeMux.Broker/BrokerCoordinator.cs` 新增 `CloseProcess(string processKey)`，用于按 process key 精确关闭单个进程；`BrokerServer.HandleRequestAsync` 失败回收路径改用它，不再借用面向 app 的 `StopApp` 做前缀匹配
+  - 顺手简化 `BrokerCoordinator.SnapshotActiveProcesses` 的 `Select+Where+Select!` 三段式，并补齐 `BrokerCoordinator.cs` / 测试脚本的文件末换行
+- **未做的事 (有意取舍)**:
+  - apphost 在隔离 HOME 下 `Environment.GetFolderPath(LocalApplicationData)` 返回空（导致直接启动 broker binary 时 socket 路径退化为 `pipemux/broker.sock`）的 .NET 怪行为，本轮选择继续走 `dotnet run`，未引入 broker 端 `PIPEMUX_SOCKET_PATH` 支持，避免范围蔓延
+- **验证**:
+  - `dotnet build PipeMux.sln` succeeded ✅ (0 warning, 0 error)
+  - `bash tests/test-management-commands-e2e.sh` passed，运行结束后 `/tmp/pipemux-mgmt-e2e-*` 与 broker 子进程均无残留 ✅
+
+### CLI 失败退出码修正 (2026-04-21): 使用 InvocationContext.ExitCode 稳定传播 ✅
+- **根因定位**:
+  - `PipeMux.CLI` 当前引用 `System.CommandLine 2.0.0-beta4.22272.1`
+  - 普通 app 调用路径使用 `SetHandler(async ...)`，失败时仅设置 `Environment.ExitCode = 1`；该版本下 `rootCommand.InvokeAsync(args)` 仍会返回 handler 默认的成功退出码，导致进程实际退出码不稳定地保持为 0
+- **修正方案**:
+  - 将普通 app 调用路径改为 `SetHandler(async (InvocationContext context) => ...)`
+  - 在 handler 内基于 Broker 响应显式设置 `context.ExitCode = 0/1`
+  - 保留现有 `RootCommand` 帮助/解析行为，不引入额外命令分发重构
+- **回归结果**:
+  - 隔离 HOME 下复现确认：`pmux unknown-app test` 现返回退出码 `1`，stderr 为 `Error: Unknown app: unknown-app`
+  - `bash tests/test-management-commands-e2e.sh` 已恢复对“卸载后 app invoke 失败”的非零退出码断言并通过 ✅
+
+### 管理命令后续化简落地 (2026-04-21): 协调器提炼 + 自动化回归 ✅
+- **新增结构收敛**:
+  - 新增 `src/PipeMux.Broker/BrokerCoordinator.cs`，封装配置快照、进程获取/启动、停止、注销与共享 gate
+  - `BrokerServer` 与 `ManagementHandler` 不再各自持有 raw lock / 生命周期编排细节，统一委托给协调器
+- **新增自动化验证**:
+  - 新增 `tests/test-management-commands-e2e.sh`
+  - 覆盖 `register -> list -> invoke -> unregister(保护) -> unregister --stop -> list`，并额外校验 `broker.toml` 的写入与移除
+- **实现取舍**:
+  - 回归脚本对管理命令失败场景断言退出码；对“卸载后 app invoke 失败”暂按错误文本断言，因为当前 CLI 普通 app 错误路径的退出码传播仍不稳定
+- **验证**:
+  - `dotnet build PipeMux.sln` succeeded ✅
+  - `bash tests/test-management-commands-e2e.sh` passed ✅
+
+### 管理命令落地后的进一步化简评估 (2026-04-21): 小而稳优先，避免再做大重构 💡
+- **当前判断**:
+  - 经过“事务性写入 + 启动/卸载线性化 + host 参数收敛”后，当前实现已接近一个较好的局部最优；继续优化更适合做小范围收敛，而不是再引入大模型重构
+- **值得优先考虑的后续化简**:
+  - 为 `:register / :unregister` 补 1 条自动化 E2E 回归，优先覆盖保护语义与持久化闭环，降低后续修改风险
+  - 若后续管理命令继续增多，可提炼一个 broker 协调器对象，封装 `BrokerServer + ManagementHandler + BrokerConfigStore` 之间共享的 raw lock / 生命周期编排
+  - 清理轻微技术债：`BrokerConfigStore.TryGetApp()` 当前未使用，`BrokerServer.ProcessAcquisitionResult` 可在未来改成更轻的私有 record/tuple
+- **暂不建议现在做的事**:
+  - 不建议立刻把全局 broker gate 拆成 per-app gate；当前本地 broker 负载模型下，正确性收益明显高于并发收益
+  - 不建议立刻把 `command` 字符串迁移为完整结构化 launcher 配置；只有在确实需要支持更多自定义启动形态时才值得承担迁移成本
+- **策略建议**:
+  - 如果只再做一轮“小而稳”的继续优化，首选“补自动化回归 + 提炼 broker 协调器”；前者补安全网，后者补可维护性
+
+### 管理命令修正落地 (2026-04-21): 事务性写入 + 删除/启动线性化 + host 参数收敛 ✅
+- **已实现**:
+  - `BrokerConfigStore` 改为基于副本落盘成功后再提交内存，避免配置保存失败导致内存/磁盘分叉
+  - `BrokerServer` 将“查配置 -> 复用/启动进程”收敛到同一 broker gate 内，与 `:stop` / `:unregister` 线性化
+  - `:register` 的 host 选项收敛为 `--host-path`（兼容旧 `--host` 别名），语义为 `PipeMux.Host` 可执行路径，不再承诺支持任意 host command line
+- **行为结果**:
+  - 运行中 `:unregister <app>` 默认拒绝；`--stop` 时先停进程再删配置
+  - `:register` 若显式提供 host 路径，会校验路径格式与文件存在性；更复杂启动命令仍建议手改 `broker.toml`
+- **验证**:
+  - `dotnet build PipeMux.sln` succeeded ✅
+  - 隔离 HOME 冒烟验证通过：`register -> list -> invoke -> unregister(保护) -> unregister --stop -> list` ✅
+
+### 管理命令后续修正方案评估 (2026-04-21): 事务性写入 + 删除/启动线性化 + host 参数收敛 💡
+- **审阅结论**:
+  - 当前 `:register` / `:unregister` 方向正确，但存在 3 个实现风险：配置落盘失败时内存/磁盘分叉、`unregister --stop` 与并发请求存在重新拉起窗口、`--host` 语义过宽但解析能力不足
+- **推荐短期方案**:
+  - `BrokerConfigStore` 对配置变更采用“失败回滚”或“副本写入后提交”，确保保存失败不会污染内存态
+  - 用同一把 broker 级 gate 线性化“查配置 -> 判定/启动进程”和“stop/unregister”，先求正确性，再考虑按 app 细化锁粒度
+  - 将 `:register` 的 `--host` 收敛为仅接受 `PipeMux.Host` 可执行路径（建议改名 `--host-path` 或 `--host-exe`），不再承诺支持任意 host command line
+- **可接受的功能简化**:
+  - `:register` 只覆盖“注册 PipeMux.Host 托管 DLL 入口”这一主路径；更复杂的启动命令继续通过手改 `broker.toml` 处理
+- **实现取舍**:
+  - 相比引入 per-app lock / 结构化 launcher 配置等更大重构，以上方案改动面更小，能优先修正正确性问题
+
+### 管理命令落地 (2026-04-21): CLI 注册/移除 + Broker 独占持久化 ✅
+- **目标**: 降低 `PipeMux.Host` 使用门槛，避免手改 `broker.toml`
+- **新增命令**:
+  - `pmux :register <app> <assemblyPath> <entryMethod> [--host <host-command>]`
+  - `pmux :unregister <app> [--stop]`
+- **架构实现**:
+  - CLI 仅做命令解析并向 Broker 发送管理请求（不直接写配置）
+  - Broker 新增 `src/PipeMux.Broker/BrokerConfigStore.cs`，对 `Apps` 做线程安全更新并原子落盘 `broker.toml`
+  - `:unregister` 对运行中实例增加保护：默认拒绝，`--stop` 时先停进程再删除配置
+- **协议扩展**:
+  - `src/PipeMux.Shared/Protocol/ManagementCommand.cs` 新增 `Register/Unregister` kind 与注册参数字段
+- **并发安全**:
+  - `BrokerServer` 与 `ManagementHandler` 共享同一 `configLock`，避免请求处理与配置写入并发冲突
+- **文档更新**:
+  - `docs/README.md` 与 `src/PipeMux.Broker/README.md` 已补充新命令示例
+- **验证**:
+  - `dotnet build` succeeded ✅
+  - 隔离 HOME 冒烟验证通过：`register -> list -> unregister`、运行中 `unregister` 防护与 `--stop` 行为均符合预期 ✅
+- **备注**:
+  - `docs/reports/migration-log.md` 与 `agent-team/indexes/README.md` 在当前仓库不存在，无法按提示核对 changefeed delta
+
 ### 后续化简落地 (2026-04-21): 端点统一 + 协议收敛 + sample/doc 清理 ✅
 - **统一 Broker 连接默认值**:
   - 新增 `src/PipeMux.Shared/BrokerConnectionDefaults.cs` / `BrokerConnectionResolver.cs` / `BrokerEndpoint.cs`

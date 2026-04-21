@@ -17,6 +17,18 @@ public static class BrokerConnectionResolver {
     }
 
     public static BrokerEndpoint ResolveServerEndpoint(BrokerConnectionSettings settings) {
+        // 与 client 端对称：环境变量优先级最高，便于测试脚本/部署在不改 toml 的前提下注入路径。
+        var explicitSocketPath = Environment.GetEnvironmentVariable(BrokerConnectionDefaults.SocketPathEnvVar);
+        if (!string.IsNullOrWhiteSpace(explicitSocketPath) && !OperatingSystem.IsWindows()) {
+            return new BrokerEndpoint(BrokerTransportKind.UnixSocket, PathHelper.ExpandPath(explicitSocketPath));
+        }
+
+        var explicitPipeName = Environment.GetEnvironmentVariable(BrokerConnectionDefaults.PipeNameEnvVar)
+                               ?? Environment.GetEnvironmentVariable(BrokerConnectionDefaults.LegacyPipeNameEnvVar);
+        if (!string.IsNullOrWhiteSpace(explicitPipeName)) {
+            return new BrokerEndpoint(BrokerTransportKind.NamedPipe, explicitPipeName);
+        }
+
         if (OperatingSystem.IsWindows()) {
             return new BrokerEndpoint(
                 BrokerTransportKind.NamedPipe,

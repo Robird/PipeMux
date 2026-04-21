@@ -93,6 +93,14 @@ dotnet run --project src/PipeMux.CLI -c Release -- :ps
 dotnet run --project src/PipeMux.CLI -c Release -- :stop calculator
 # Output: Stopped 2 instance(s) of calculator
 
+# 注册一个由 PipeMux.Host 托管的 App
+dotnet run --project src/PipeMux.CLI -c Release -- :register counter ./samples/HostDemo/bin/Debug/net9.0/HostDemo.dll HostDemo.DebugEntries.BuildCounter --host-path /repos/focus/PipeMux/src/PipeMux.Host/bin/Debug/net9.0/PipeMux.Host
+# Output: Registered app 'counter'
+
+# 移除注册（若在运行中可加 --stop）
+dotnet run --project src/PipeMux.CLI -c Release -- :unregister counter --stop
+# Output: Unregistered app 'counter' (stopped 1 process(es))
+
 # 显示帮助信息
 dotnet run --project src/PipeMux.CLI -c Release -- :help
 ```
@@ -108,7 +116,11 @@ pmux calculator push 10
 pmux :list
 pmux :ps
 pmux :stop calculator
+pmux :register counter ./samples/HostDemo/bin/Debug/net9.0/HostDemo.dll HostDemo.DebugEntries.BuildCounter
+pmux :unregister counter --stop
 ```
+
+`:register` 仅覆盖 `PipeMux.Host` 托管 DLL 入口这一主路径。若需要自定义完整启动命令，请直接编辑 `broker.toml`。
 
 ## 开发自己的 PipeMux App
 

@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.CommandLine.Invocation;
 using PipeMux.CLI;
 using PipeMux.Shared.Protocol;
 
@@ -35,17 +36,20 @@ var argsArgument = new Argument<string[]>("args", "Command and arguments (e.g., 
 rootCommand.AddArgument(appArgument);
 rootCommand.AddArgument(argsArgument);
 
-rootCommand.SetHandler(async (app, args) => {
+rootCommand.SetHandler(async (InvocationContext context) => {
+    var app = context.ParseResult.GetValueForArgument(appArgument);
+    var appArgs = context.ParseResult.GetValueForArgument(argsArgument) ?? [];
     var client = new BrokerClient();
-    var result = await client.SendRequestAsync(app, args);
+    var result = await client.SendRequestAsync(app, appArgs);
     
     if (result.Success) {
         Console.WriteLine(result.Data ?? "(no output)");
+        context.ExitCode = 0;
+        return;
     }
-    else {
-        Console.Error.WriteLine($"Error: {result.Error}");
-        Environment.ExitCode = 1;
-    }
-}, appArgument, argsArgument);
+    
+    Console.Error.WriteLine($"Error: {result.Error}");
+    context.ExitCode = 1;
+});
 
 return await rootCommand.InvokeAsync(args);

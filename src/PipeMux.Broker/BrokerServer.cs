@@ -11,17 +11,17 @@ namespace PipeMux.Broker;
 /// Broker 服务器主逻辑
 /// </summary>
 public sealed class BrokerServer {
-    private readonly BrokerConfig _config;
-    private readonly ProcessRegistry _registry;
+    private readonly BrokerConnectionSettings _brokerSettings;
+    private readonly BrokerCoordinator _coordinator;
     private readonly ManagementHandler _managementHandler;
     private CancellationTokenSource? _cts;
     private readonly List<Task> _clientTasks = new(); // P0 Fix: Track background tasks
     private readonly object _taskLock = new();
 
-    public BrokerServer(BrokerConfig config, ProcessRegistry registry) {
-        _config = config;
-        _registry = registry;
-        _managementHandler = new ManagementHandler(config, registry);
+    public BrokerServer(BrokerConnectionSettings brokerSettings, BrokerCoordinator coordinator) {
+        _brokerSettings = brokerSettings;
+        _coordinator = coordinator;
+        _managementHandler = new ManagementHandler(coordinator);
     }
 
     /// <summary>
@@ -31,9 +31,19 @@ public sealed class BrokerServer {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         
         // 自动启动配置的应用
-        foreach (var (name, settings) in _config.Apps.Where(kv => kv.Value.AutoStart)) {
+        foreach (var (name, settings) in _coordinator.SnapshotAutoStartApps()) {
             try {
-                _registry.Start(name, settings.Command);
+                var request = new Request {
+                    App = name,
+                    Args = Array.Empty<string>(),
+                    TerminalId = null
+                };
+
+                var acquisition = _coordinator.AcquireProcess(request);
+                if (!acquisition.Success) {
+                    throw new InvalidOperationException(acquisition.Error?.Error ?? $"Failed to acquire auto-start app: {name}");
+                }
+
                 Console.Error.WriteLine($"[INFO] Auto-started: {name}");
             }
             catch (Exception ex) {
@@ -42,7 +52,7 @@ public sealed class BrokerServer {
         }
 
         try {
-            var endpoint = BrokerConnectionResolver.ResolveServerEndpoint(_config.Broker);
+            var endpoint = BrokerConnectionResolver.ResolveServerEndpoint(_brokerSettings);
             switch (endpoint.Transport) {
                 case BrokerTransportKind.UnixSocket:
                     Console.Error.WriteLine($"[INFO] Broker started, listening on unix socket: {endpoint.Value}");
@@ -244,48 +254,20 @@ public sealed class BrokerServer {
     /// 处理单个请求
     /// </summary>
     private async Task<Response> HandleRequestAsync(Request request) {
-        // 检查应用名是否有效
-        if (string.IsNullOrEmpty(request.App)) {
-            return Response.Fail(request.RequestId, "App name is required");
+        var acquisition = _coordinator.AcquireProcess(request);
+        if (!acquisition.Success) {
+            return acquisition.Error!;
         }
 
-        // 检查应用是否注册
-        if (!_config.Apps.TryGetValue(request.App, out var appSettings)) {
-            return Response.Fail(request.RequestId, $"Unknown app: {request.App}");
-        }
-
-        // 生成进程键：使用 App:TerminalId 实现多终端隔离
-        // 如果没有 TerminalId，则回退到仅用 App 名（所有终端共享同一实例）
-        var processKey = !string.IsNullOrEmpty(request.TerminalId)
-            ? $"{request.App}:{request.TerminalId}"
-            : request.App;
-
-        // 获取或启动进程
-        var process = _registry.Get(processKey);
-        bool isNewProcess = false;
-        
-        // P0 Fix: Check process health and restart if unhealthy
-        if (process == null || process.HasExited || !process.IsHealthy()) {
-            try {
-                Console.Error.WriteLine($"[INFO] Starting new process for {request.App} (key: {processKey})");
-                process = _registry.Start(processKey, appSettings.Command);
-                isNewProcess = true;
-                
-                // 新启动的进程可能需要初始化时间
-                await Task.Delay(100);
-            }
-            catch (Exception ex) {
-                Console.Error.WriteLine($"[ERROR] Failed to start {request.App}: {ex.Message}");
-                return Response.Fail(request.RequestId, $"Failed to start app: {ex.Message}");
-            }
-        }
-        else {
-            Console.Error.WriteLine($"[INFO] Reusing existing process for key: {processKey}, PID: {process.ProcessId}");
-        }
+        var process = acquisition.Process!;
+        var settings = acquisition.Settings!;
+        var processKey = acquisition.ProcessKey!;
 
         // 新协议：调用 invoke 方法，传递原始 args 数组
+        // 注：StreamJsonRpc 会在子进程 stdout 就绪后才完成首个 InvokeAsync，
+        // 不需要冷启动 sleep；超时由 settings.Timeout 兜底。
         try {
-            var timeout = TimeSpan.FromSeconds(appSettings.Timeout);
+            var timeout = TimeSpan.FromSeconds(settings.Timeout);
             
             var result = await process.InvokeAsync<InvokeResult>("invoke", new object?[] { request.Args }, timeout);
             var output = result.Output.TrimEnd('\n', '\r');
@@ -308,8 +290,8 @@ public sealed class BrokerServer {
         }
         catch (Exception ex) {
             Console.Error.WriteLine($"[ERROR] Communication error with {request.App}: {ex.Message}");
-            if (isNewProcess) {
-                _registry.Close(processKey);
+            if (acquisition.IsNewProcess) {
+                _coordinator.CloseProcess(processKey);
             }
             return Response.Fail(request.RequestId, $"Communication error: {ex.Message}");
         }
