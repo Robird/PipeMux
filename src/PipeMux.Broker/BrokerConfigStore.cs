@@ -1,6 +1,5 @@
 using System.Text;
 using PipeMux.Shared;
-using Tomlyn;
 
 namespace PipeMux.Broker;
 
@@ -20,25 +19,14 @@ public sealed class BrokerConfigStore {
     /// <summary>当前已注册 app 的只读视图（不复制；调用方需在 gate 内访问）。</summary>
     public IReadOnlyDictionary<string, AppSettings> Apps => _config.Apps;
 
-    public bool TryRegisterHostApp(
-        string appName,
-        string assemblyPath,
-        string methodName,
-        string? hostPath,
-        out string message
-    ) {
+    public bool TryRegisterApp(string appName, AppSettings settings, out string message) {
         if (_config.Apps.ContainsKey(appName)) {
             message = $"App already registered: {appName}";
             return false;
         }
 
-        var effectiveHostPath = string.IsNullOrWhiteSpace(hostPath) ? "pipemux-host" : hostPath;
         var updatedApps = CloneApps(_config.Apps);
-        updatedApps[appName] = new AppSettings {
-            Command = BuildHostCommand(effectiveHostPath, assemblyPath, methodName),
-            AutoStart = false,
-            Timeout = 30
-        };
+        updatedApps[appName] = CloneAppSettings(settings);
 
         if (!TrySaveApps(updatedApps, out var error)) {
             message = $"Failed to save broker config: {error}";
@@ -86,13 +74,7 @@ public sealed class BrokerConfigStore {
 
     private bool TrySaveApps(Dictionary<string, AppSettings> apps, out string error) {
         try {
-            SaveModel(new BrokerConfig {
-                Broker = new BrokerConnectionSettings {
-                    SocketPath = _config.Broker.SocketPath,
-                    PipeName = _config.Broker.PipeName
-                },
-                Apps = apps
-            });
+            SaveModel(BrokerConfigTomlCodec.CreateWithApps(_config.Broker, apps));
 
             error = string.Empty;
             return true;
@@ -109,7 +91,7 @@ public sealed class BrokerConfigStore {
             Directory.CreateDirectory(directory);
         }
 
-        var toml = Toml.FromModel(configModel);
+        var toml = BrokerConfigTomlCodec.Serialize(configModel);
         var tempFile = Path.Combine(directory ?? ".", $".{Path.GetFileName(_configPath)}.{Guid.NewGuid():N}.tmp");
 
         try {
@@ -127,30 +109,5 @@ public sealed class BrokerConfigStore {
                 File.Delete(tempFile);
             }
         }
-    }
-
-    private static string BuildHostCommand(string hostPath, string assemblyPath, string methodName) {
-        var normalizedHostPath = NormalizeExecutable(hostPath);
-        var expandedAssembly = PathHelper.ExpandPath(assemblyPath);
-        var absoluteAssembly = Path.GetFullPath(expandedAssembly);
-
-        return string.Join(" ", [
-            EscapeArgument(normalizedHostPath),
-            EscapeArgument(absoluteAssembly),
-            EscapeArgument(methodName)
-        ]);
-    }
-
-    private static string NormalizeExecutable(string executable) {
-        var expandedExecutable = PathHelper.ExpandPath(executable);
-        if (Path.IsPathRooted(expandedExecutable) || executable.Contains(Path.DirectorySeparatorChar) || executable.Contains(Path.AltDirectorySeparatorChar)) {
-            return Path.GetFullPath(expandedExecutable);
-        }
-
-        return expandedExecutable;
-    }
-
-    private static string EscapeArgument(string value) {
-        return $"\"{value.Replace("\"", "\\\"")}\"";
     }
 }

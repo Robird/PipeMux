@@ -1,5 +1,4 @@
 using PipeMux.Shared;
-using Tomlyn;
 
 namespace PipeMux.Broker;
 
@@ -15,7 +14,7 @@ public static class ConfigLoader {
 
         if (File.Exists(configPath)) {
             var toml = File.ReadAllText(configPath);
-            return Toml.ToModel<BrokerConfig>(toml);
+            return BrokerConfigTomlCodec.Deserialize(toml);
         }
 
         // P0 Fix: Warn when config file is missing
@@ -23,15 +22,6 @@ public static class ConfigLoader {
         Console.Error.WriteLine("[INFO] Using default configuration");
         
         // 返回默认配置
-        return CreateDefaultConfig();
-    }
-
-    private static BrokerConfig CreateDefaultConfig() {
-        return new BrokerConfig {
-            Broker = new BrokerConnectionSettings {
-                SocketPath = null // 使用默认
-            },
-            Apps = new Dictionary<string, AppSettings>()
-        };
+        return BrokerConfigTomlCodec.CreateDefault();
     }
 }

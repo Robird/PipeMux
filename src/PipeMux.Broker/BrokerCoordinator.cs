@@ -58,28 +58,36 @@ public sealed class BrokerCoordinator {
     }
 
     public ProcessAcquisitionResult AcquireProcess(Request request) {
+        return AcquireProcess(request.App, request.TerminalId, request.RequestId);
+    }
+
+    public ProcessAcquisitionResult AcquireProcess(string? appName, string? terminalId = null) {
+        return AcquireProcess(appName, terminalId, requestId: string.Empty);
+    }
+
+    private ProcessAcquisitionResult AcquireProcess(string? appName, string? terminalId, string requestId) {
         lock (_brokerGate) {
-            if (string.IsNullOrEmpty(request.App)) {
-                return ProcessAcquisitionResult.Fail(Response.Fail(request.RequestId, "App name is required"));
+            if (string.IsNullOrEmpty(appName)) {
+                return ProcessAcquisitionResult.Fail(Response.Fail(requestId, "App name is required"));
             }
 
-            if (!_configStore.Apps.TryGetValue(request.App, out var configuredSettings)) {
-                return ProcessAcquisitionResult.Fail(Response.Fail(request.RequestId, $"Unknown app: {request.App}"));
+            if (!_configStore.Apps.TryGetValue(appName, out var configuredSettings)) {
+                return ProcessAcquisitionResult.Fail(Response.Fail(requestId, $"Unknown app: {appName}"));
             }
 
-            var processKey = BuildProcessKey(request.App, request.TerminalId);
+            var processKey = BuildProcessKey(appName, terminalId);
             var process = _registry.Get(processKey);
             var isNewProcess = false;
 
             if (process == null || process.HasExited || !process.IsHealthy()) {
                 try {
-                    Console.Error.WriteLine($"[INFO] Starting new process for {request.App} (key: {processKey})");
+                    Console.Error.WriteLine($"[INFO] Starting new process for {appName} (key: {processKey})");
                     process = _registry.Start(processKey, configuredSettings.Command);
                     isNewProcess = true;
                 }
                 catch (Exception ex) {
-                    Console.Error.WriteLine($"[ERROR] Failed to start {request.App}: {ex.Message}");
-                    return ProcessAcquisitionResult.Fail(Response.Fail(request.RequestId, $"Failed to start app: {ex.Message}"));
+                    Console.Error.WriteLine($"[ERROR] Failed to start {appName}: {ex.Message}");
+                    return ProcessAcquisitionResult.Fail(Response.Fail(requestId, $"Failed to start app: {ex.Message}"));
                 }
             }
             else {
@@ -90,9 +98,9 @@ public sealed class BrokerCoordinator {
         }
     }
 
-    public BrokerOperationResult RegisterHostApp(string appName, string assemblyPath, string methodName, string? hostPath) {
+    public BrokerOperationResult RegisterApp(string appName, AppSettings settings) {
         lock (_brokerGate) {
-            return _configStore.TryRegisterHostApp(appName, assemblyPath, methodName, hostPath, out var message)
+            return _configStore.TryRegisterApp(appName, settings, out var message)
                 ? BrokerOperationResult.Ok(message)
                 : BrokerOperationResult.Fail(message);
         }

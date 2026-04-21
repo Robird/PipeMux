@@ -89,10 +89,7 @@ public sealed class ManagementHandler {
             return Task.FromResult(Response.Fail(request.RequestId, "Usage: pmux :stop <app-name>"));
         }
 
-        var result = _coordinator.StopApp(targetApp);
-        return Task.FromResult(result.Success
-            ? Response.Ok(request.RequestId, result.Message)
-            : Response.Fail(request.RequestId, result.Message));
+        return Task.FromResult(CreateOperationResponse(request.RequestId, _coordinator.StopApp(targetApp)));
     }
 
     /// <summary>
@@ -106,41 +103,11 @@ public sealed class ManagementHandler {
     /// :register - 注册一个由 PipeMux.Host 托管的 app
     /// </summary>
     private Task<Response> HandleRegisterAsync(Request request, ManagementCommand command) {
-        var appName = command.TargetApp;
-        var assemblyPath = command.TargetAssemblyPath;
-        var methodName = command.TargetMethodName;
-        var hostPath = command.HostPath;
-
-        if (string.IsNullOrWhiteSpace(appName) || string.IsNullOrWhiteSpace(assemblyPath) || string.IsNullOrWhiteSpace(methodName)) {
-            return Task.FromResult(Response.Fail(
-                request.RequestId,
-                "Usage: pmux :register <app-name> <assembly-path> <namespace.type.method> [--host-path <pipemux-host-path>]"
-            ));
+        if (!HostRegistrationRequest.TryCreate(command, out var registration, out var error)) {
+            return Task.FromResult(Response.Fail(request.RequestId, error));
         }
 
-        var expandedPath = PipeMux.Shared.PathHelper.ExpandPath(assemblyPath);
-        if (!File.Exists(expandedPath) && !File.Exists(Path.GetFullPath(expandedPath))) {
-            return Task.FromResult(Response.Fail(request.RequestId, $"Assembly not found: {assemblyPath}"));
-        }
-
-        if (!string.IsNullOrWhiteSpace(hostPath)) {
-            if (!LooksLikeFilePath(hostPath)) {
-                return Task.FromResult(Response.Fail(
-                    request.RequestId,
-                    "--host-path must be a path to the PipeMux.Host executable. For custom command lines, edit broker.toml directly."
-                ));
-            }
-
-            hostPath = Path.GetFullPath(PipeMux.Shared.PathHelper.ExpandPath(hostPath));
-            if (!File.Exists(hostPath)) {
-                return Task.FromResult(Response.Fail(request.RequestId, $"Host executable not found: {command.HostPath}"));
-            }
-        }
-
-        var result = _coordinator.RegisterHostApp(appName, assemblyPath, methodName, hostPath);
-        return Task.FromResult(result.Success
-            ? Response.Ok(request.RequestId, result.Message)
-            : Response.Fail(request.RequestId, result.Message));
+        return Task.FromResult(CreateOperationResponse(request.RequestId, _coordinator.RegisterApp(registration.AppName, registration.Settings)));
     }
 
     /// <summary>
@@ -152,18 +119,13 @@ public sealed class ManagementHandler {
             return Task.FromResult(Response.Fail(request.RequestId, "Usage: pmux :unregister <app-name> [--stop]"));
         }
 
-        var result = _coordinator.UnregisterApp(appName, command.Flag);
-        return Task.FromResult(result.Success
-            ? Response.Ok(request.RequestId, result.Message)
-            : Response.Fail(request.RequestId, result.Message));
+        return Task.FromResult(CreateOperationResponse(request.RequestId, _coordinator.UnregisterApp(appName, command.Flag)));
     }
 
-    private static bool LooksLikeFilePath(string value) {
-        return Path.IsPathRooted(value)
-            || value.StartsWith(".", StringComparison.Ordinal)
-            || value.StartsWith("~", StringComparison.Ordinal)
-            || value.Contains(Path.DirectorySeparatorChar)
-            || value.Contains(Path.AltDirectorySeparatorChar);
+    private static Response CreateOperationResponse(string requestId, BrokerOperationResult result) {
+        return result.Success
+            ? Response.Ok(requestId, result.Message)
+            : Response.Fail(requestId, result.Message);
     }
 
     /// <summary>

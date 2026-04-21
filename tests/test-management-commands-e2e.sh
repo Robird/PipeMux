@@ -24,10 +24,7 @@ BROKER_BIN="$ROOT_DIR/src/PipeMux.Broker/bin/Debug/net9.0/PipeMux.Broker"
 CLI_BIN="$ROOT_DIR/src/PipeMux.CLI/bin/Debug/net9.0/PipeMux.CLI"
 
 cleanup() {
-    if [[ -n "$BROKER_PID" ]] && kill -0 "$BROKER_PID" 2>/dev/null; then
-        kill "$BROKER_PID" 2>/dev/null || true
-        wait "$BROKER_PID" 2>/dev/null || true
-    fi
+    stop_broker >/dev/null 2>&1 || true
 
     rm -rf "$TEST_HOME"
 }
@@ -48,6 +45,33 @@ run_cli() {
     "$CLI_BIN" "$@"
 }
 
+start_broker() {
+    "$BROKER_BIN" >> "$LOG_FILE" 2>&1 &
+    BROKER_PID=$!
+
+    local ready=0
+    for _ in $(seq 1 40); do
+        if run_cli :help > /dev/null 2>&1; then
+            ready=1
+            break
+        fi
+        sleep 0.25
+    done
+
+    if [[ "$ready" -ne 1 ]]; then
+        fail "Broker did not become ready"
+    fi
+}
+
+stop_broker() {
+    if [[ -n "$BROKER_PID" ]] && kill -0 "$BROKER_PID" 2>/dev/null; then
+        kill "$BROKER_PID" 2>/dev/null || true
+        wait "$BROKER_PID" 2>/dev/null || true
+    fi
+
+    BROKER_PID=""
+}
+
 assert_contains() {
     local actual="$1"
     local expected="$2"
@@ -63,28 +87,15 @@ echo "PipeMux Management Commands E2E Test"
 echo "======================================"
 echo ""
 
-echo "[1/7] Building required projects..."
+echo "[1/8] Building required projects..."
 cd "$ROOT_DIR"
 dotnet build PipeMux.sln --nologo > /dev/null
 echo "✅ Build successful"
 echo ""
 
-echo "[2/7] Starting isolated Broker..."
-"$BROKER_BIN" > "$LOG_FILE" 2>&1 &
-BROKER_PID=$!
-
-ready=0
-for _ in $(seq 1 40); do
-    if run_cli :help > /dev/null 2>&1; then
-        ready=1
-        break
-    fi
-    sleep 0.25
-done
-
-if [[ "$ready" -ne 1 ]]; then
-    fail "Broker did not become ready"
-fi
+echo "[2/8] Starting isolated Broker..."
+: > "$LOG_FILE"
+start_broker
 
 echo "✅ Broker started (PID: $BROKER_PID)"
 echo ""
@@ -92,7 +103,7 @@ echo ""
 HOST_DLL="$ROOT_DIR/samples/HostDemo/bin/Debug/net9.0/HostDemo.dll"
 HOST_EXE="$ROOT_DIR/src/PipeMux.Host/bin/Debug/net9.0/PipeMux.Host"
 
-echo "[3/7] Registering PipeMux.Host-managed app..."
+echo "[3/8] Registering PipeMux.Host-managed app..."
 register_output="$(run_cli :register counter "$HOST_DLL" HostDemo.DebugEntries.BuildCounter --host-path "$HOST_EXE")"
 assert_contains "$register_output" "Registered app 'counter'" "register command"
 
@@ -107,19 +118,34 @@ fi
 echo "✅ Register persisted to broker.toml"
 echo ""
 
-echo "[4/7] Verifying list and invoke path..."
+echo "[4/8] Verifying config reload after broker restart..."
+stop_broker
+start_broker
+
+reloaded_list_output="$(run_cli :list)"
+assert_contains "$reloaded_list_output" "counter" ":list after broker restart"
+
+reloaded_invoke_output="$(run_cli counter inc)"
+if [[ "$reloaded_invoke_output" != "Counter: 1" ]]; then
+    fail "invoke after broker restart: expected 'Counter: 1', got '$reloaded_invoke_output'"
+fi
+
+echo "✅ Broker reloaded broker.toml after restart"
+echo ""
+
+echo "[5/8] Verifying list and invoke path..."
 list_output="$(run_cli :list)"
 assert_contains "$list_output" "counter" ":list after register"
 
 invoke_output="$(run_cli counter inc)"
-if [[ "$invoke_output" != "Counter: 1" ]]; then
-    fail "invoke command: expected 'Counter: 1', got '$invoke_output'"
+if [[ "$invoke_output" != "Counter: 2" ]]; then
+    fail "invoke command: expected 'Counter: 2', got '$invoke_output'"
 fi
 
 echo "✅ Registered app listed and invoked successfully"
 echo ""
 
-echo "[5/7] Verifying unregister protection..."
+echo "[6/8] Verifying unregister protection..."
 if unregister_output="$(run_cli :unregister counter 2>&1)"; then
     fail ":unregister without --stop should have failed"
 fi
@@ -128,7 +154,7 @@ assert_contains "$unregister_output" "has 1 running process(es)" "unregister pro
 echo "✅ Running process was protected from accidental unregister"
 echo ""
 
-echo "[6/7] Unregistering with --stop..."
+echo "[7/8] Unregistering with --stop..."
 unregister_stop_output="$(run_cli :unregister counter --stop)"
 assert_contains "$unregister_stop_output" "Unregistered app 'counter'" "unregister --stop"
 assert_contains "$unregister_stop_output" "stopped 1 process(es)" "unregister --stop count"
@@ -140,7 +166,7 @@ fi
 echo "✅ App stopped and removed from broker.toml"
 echo ""
 
-echo "[7/7] Verifying post-unregister state..."
+echo "[8/8] Verifying post-unregister state..."
 final_list_output="$(run_cli :list)"
 assert_contains "$final_list_output" "(no applications registered)" "final :list"
 

@@ -31,15 +31,9 @@ public sealed class BrokerServer {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         
         // 自动启动配置的应用
-        foreach (var (name, settings) in _coordinator.SnapshotAutoStartApps()) {
+        foreach (var (name, _) in _coordinator.SnapshotAutoStartApps()) {
             try {
-                var request = new Request {
-                    App = name,
-                    Args = Array.Empty<string>(),
-                    TerminalId = null
-                };
-
-                var acquisition = _coordinator.AcquireProcess(request);
+                var acquisition = _coordinator.AcquireProcess(name);
                 if (!acquisition.Success) {
                     throw new InvalidOperationException(acquisition.Error?.Error ?? $"Failed to acquire auto-start app: {name}");
                 }
