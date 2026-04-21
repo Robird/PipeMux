@@ -6,7 +6,7 @@
 #
 # 如果你已经执行过 `scripts/install-ubuntu-user.sh`，
 # 并希望把当前机器作为稳定的日常使用环境，请优先参考：
-# docs/ubuntu-deployment.md
+# docs/install.md
 
 [broker]
 # Linux/Ubuntu: 推荐使用 Unix Domain Socket

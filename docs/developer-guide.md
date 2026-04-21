@@ -1,8 +1,10 @@
 # PipeMux 源码开发与调试
 
-这份文档面向“直接在仓库里改代码、调试 sample、排查 Broker/CLI 行为”的场景。这里保留 `dotnet run --project ...` 的做法，但它只代表源码工作流，不代表安装后的日常使用方式。
+这份文档面向“直接在仓库里改代码、调试 sample、排查 Broker/CLI 行为”的场景。这里保留 `dotnet run --project ...` 的做法，它只代表源码工作流，不代表安装后的日常使用方式。
 
-如果你已经通过 [`../scripts/install-ubuntu-user.sh`](/repos/focus/PipeMux/scripts/install-ubuntu-user.sh) 把当前机器装成稳定环境，并且只是想调用 `pmux`，请改看 [`ubuntu-deployment.md`](ubuntu-deployment.md)。
+- 如果你只是想用已安装的 `pmux` 调用 app → [user-guide.md](user-guide.md)
+- 如果你还没把 PipeMux 装到本机 → [install.md](install.md)
+- 如果你想写自己的 PipeMux App → [sdk-authoring.md](sdk-authoring.md)
 
 ## 适用场景
 
@@ -107,7 +109,8 @@ dotnet run --project samples/TerminalIdTest
 
 ## 进一步阅读
 
-- 已安装日常使用: [`ubuntu-deployment.md`](ubuntu-deployment.md)
-- 源码调试配置示例: [`examples/broker.toml`](examples/broker.toml)
-- Calculator sample: [`../samples/Calculator/README.md`](/repos/focus/PipeMux/samples/Calculator/README.md)
-- 架构说明: [`pipemux-broker-architecture.md`](pipemux-broker-architecture.md)
+- 已安装日常使用：[user-guide.md](user-guide.md)
+- 安装与 systemd：[install.md](install.md)
+- 源码调试配置示例：[examples/broker.toml](examples/broker.toml)
+- Calculator sample：[`../samples/Calculator/README.md`](../samples/Calculator/README.md)
+- 架构说明：[architecture.md](architecture.md)

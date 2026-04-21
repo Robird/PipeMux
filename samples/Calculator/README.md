@@ -2,8 +2,9 @@
 
 如果你还没有可用的 `pmux` 命令，先看仓库文档入口：
 
-- 已安装日常使用：[`../../docs/ubuntu-deployment.md`](../../docs/ubuntu-deployment.md)
-- 源码开发 / 调试：[`../../docs/pipemux-quickstart.md`](../../docs/pipemux-quickstart.md)
+- 已安装日常使用：[`../../docs/user-guide.md`](../../docs/user-guide.md)
+- 安装与 systemd：[`../../docs/install.md`](../../docs/install.md)
+- 源码开发 / 调试：[`../../docs/developer-guide.md`](../../docs/developer-guide.md)
 
 这个示例展示的是当前 PipeMux 形态下的“有状态 CLI App”：
 

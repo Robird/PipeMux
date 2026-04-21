@@ -31,6 +31,7 @@ src/
 
 ## 相关文档
 
-- 快速开始: [`../../docs/pipemux-quickstart.md`](../../docs/pipemux-quickstart.md)
-- Ubuntu 部署: [`../../docs/ubuntu-deployment.md`](../../docs/ubuntu-deployment.md)
-- 架构说明: [`../../docs/pipemux-broker-architecture.md`](../../docs/pipemux-broker-architecture.md)
+- 使用指南：[`../../docs/user-guide.md`](../../docs/user-guide.md)
+- 源码开发：[`../../docs/developer-guide.md`](../../docs/developer-guide.md)
+- 安装与 systemd：[`../../docs/install.md`](../../docs/install.md)
+- 架构说明：[`../../docs/architecture.md`](../../docs/architecture.md)
