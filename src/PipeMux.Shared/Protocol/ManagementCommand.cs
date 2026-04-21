@@ -35,7 +35,7 @@ public sealed class ManagementCommand {
     public string? TargetApp { get; init; }
 
     /// <summary>
-    /// register 命令的 PipeMux.Host 可执行路径（默认从 PATH 查找 pipemux-host）
+    /// register 命令的 PipeMux.Host 可执行路径（默认从 PATH 查找 pmux-host）
     /// </summary>
     public string? HostPath { get; init; }
 

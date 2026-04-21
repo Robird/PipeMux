@@ -173,7 +173,7 @@ await app.RunAsync(rootCommand);
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/PipeMux.Sdk/PipeMux.Sdk.csproj" />

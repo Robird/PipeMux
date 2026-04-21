@@ -138,7 +138,7 @@ public sealed class ManagementHandler {
               :list          List registered applications
               :ps            List running processes
               :stop <app>    Stop processes for an application
-              :register <app> <assembly> <entry> [--host-path <pipemux-host-path>]
+              :register <app> <assembly> <entry> [--host-path <pmux-host-path>]
                              Register an app hosted by PipeMux.Host
               :unregister <app> [--stop]
                              Remove app from config (optionally stop running instances)

@@ -3,7 +3,7 @@ using PipeMux.Sdk;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: pipemux-host <assemblyPath> <Namespace.Type.Method>");
+    Console.Error.WriteLine("Usage: pmux-host <assemblyPath> <Namespace.Type.Method>");
     Console.Error.WriteLine();
     Console.Error.WriteLine("Arguments:");
     Console.Error.WriteLine("  assemblyPath            Path to the target .NET assembly (.dll)");
@@ -15,7 +15,7 @@ if (args.Length < 2)
     Console.Error.WriteLine("  - return System.CommandLine.RootCommand or Task<RootCommand>");
     Console.Error.WriteLine();
     Console.Error.WriteLine("Example:");
-    Console.Error.WriteLine("  pipemux-host ./MyLib.dll MyLib.DebugEntries.BuildCalculator");
+    Console.Error.WriteLine("  pmux-host ./MyLib.dll MyLib.DebugEntries.BuildCalculator");
     return 1;
 }
 

@@ -18,7 +18,7 @@
 
 - 发布 `PipeMux.Broker`、`PipeMux.CLI`、`PipeMux.Host`
 - 安装到 `~/.local/share/pipemux/`
-- 创建快捷命令 `~/.local/bin/pmux` 与 `~/.local/bin/pipemux-host`
+- 创建快捷命令 `~/.local/bin/pmux` 与 `~/.local/bin/pmux-host`
 - 安装 user-level `systemd` 服务 `~/.config/systemd/user/pipemux-broker.service`
 - 首次安装时自动生成 `~/.config/pipemux/broker.toml`
 

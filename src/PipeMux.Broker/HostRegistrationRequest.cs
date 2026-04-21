@@ -9,7 +9,7 @@ namespace PipeMux.Broker;
 /// 负责把管理命令里的 host/assembly/method 输入校验并收敛成可持久化的 AppSettings。
 /// </summary>
 public sealed class HostRegistrationRequest {
-    private const string DefaultHostExecutable = "pipemux-host";
+    private const string DefaultHostExecutable = "pmux-host";
 
     public required string AppName { get; init; }
     public required AppSettings Settings { get; init; }
@@ -20,7 +20,7 @@ public sealed class HostRegistrationRequest {
         if (string.IsNullOrWhiteSpace(command.TargetApp)
             || string.IsNullOrWhiteSpace(command.TargetAssemblyPath)
             || string.IsNullOrWhiteSpace(command.TargetMethodName)) {
-            error = "Usage: pmux :register <app-name> <assembly-path> <namespace.type.method> [--host-path <pipemux-host-path>]";
+            error = "Usage: pmux :register <app-name> <assembly-path> <namespace.type.method> [--host-path <pmux-host-path>]";
             return false;
         }
 

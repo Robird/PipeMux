@@ -116,7 +116,7 @@ sync_dir "$stage_dir/cli" "$INSTALL_ROOT/bin/cli"
 sync_dir "$stage_dir/host" "$INSTALL_ROOT/bin/host"
 
 write_wrapper "$BIN_DIR/pmux" "$INSTALL_ROOT/bin/cli/PipeMux.CLI"
-write_wrapper "$BIN_DIR/pipemux-host" "$INSTALL_ROOT/bin/host/PipeMux.Host"
+write_wrapper "$BIN_DIR/pmux-host" "$INSTALL_ROOT/bin/host/PipeMux.Host"
 
 write_default_config_if_missing
 install_service_file
@@ -146,7 +146,7 @@ Installed files:
 
 Command shortcuts:
   $BIN_DIR/pmux
-  $BIN_DIR/pipemux-host
+  $BIN_DIR/pmux-host
 
 If '$BIN_DIR' is not on PATH, add this line to your shell rc:
   export PATH="$BIN_DIR:\$PATH"

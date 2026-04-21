@@ -35,27 +35,27 @@ Console.WriteLine();
 Console.WriteLine($"{tests.Length} parser test(s) passed.");
 
 static void RegisterParsesWithLeadingHostPath() {
-    var command = RequireParsed(":register", "--host-path", "/tmp/pipemux-host", "counter", "Counter.dll", "Demo.Build");
+    var command = RequireParsed(":register", "--host-path", "/tmp/pmux-host", "counter", "Counter.dll", "Demo.Build");
     AssertEqual(ManagementCommandKind.Register, command.Kind, "Kind");
     AssertEqual("counter", command.TargetApp, "TargetApp");
     AssertEqual("Counter.dll", command.TargetAssemblyPath, "TargetAssemblyPath");
     AssertEqual("Demo.Build", command.TargetMethodName, "TargetMethodName");
-    AssertEqual("/tmp/pipemux-host", command.HostPath, "HostPath");
+    AssertEqual("/tmp/pmux-host", command.HostPath, "HostPath");
 }
 
 static void RegisterParsesWithTrailingHostPath() {
-    var command = RequireParsed(":register", "counter", "Counter.dll", "Demo.Build", "--host-path", "/tmp/pipemux-host");
+    var command = RequireParsed(":register", "counter", "Counter.dll", "Demo.Build", "--host-path", "/tmp/pmux-host");
     AssertEqual(ManagementCommandKind.Register, command.Kind, "Kind");
     AssertEqual("counter", command.TargetApp, "TargetApp");
     AssertEqual("Counter.dll", command.TargetAssemblyPath, "TargetAssemblyPath");
     AssertEqual("Demo.Build", command.TargetMethodName, "TargetMethodName");
-    AssertEqual("/tmp/pipemux-host", command.HostPath, "HostPath");
+    AssertEqual("/tmp/pmux-host", command.HostPath, "HostPath");
 }
 
 static void RegisterParsesWithLegacyHostAlias() {
-    var command = RequireParsed(":register", "counter", "Counter.dll", "Demo.Build", "--host", "/tmp/pipemux-host");
+    var command = RequireParsed(":register", "counter", "Counter.dll", "Demo.Build", "--host", "/tmp/pmux-host");
     AssertEqual(ManagementCommandKind.Register, command.Kind, "Kind");
-    AssertEqual("/tmp/pipemux-host", command.HostPath, "HostPath");
+    AssertEqual("/tmp/pmux-host", command.HostPath, "HostPath");
 }
 
 static void UnregisterParsesWithLeadingStopFlag() {
@@ -77,7 +77,7 @@ static void RegisterRejectsMissingHostPathValue() {
 }
 
 static void RegisterRejectsUnknownOption() {
-    AssertNull(Parse(":register", "counter", "Counter.dll", "Demo.Build", "--host-pth", "/tmp/pipemux-host"));
+    AssertNull(Parse(":register", "counter", "Counter.dll", "Demo.Build", "--host-pth", "/tmp/pmux-host"));
 }
 
 static void UnregisterRejectsUnknownOption() {
