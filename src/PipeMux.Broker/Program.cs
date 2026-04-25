@@ -1,6 +1,15 @@
 using PipeMux.Broker;
+using PipeMux.Shared.Protocol;
 
 Console.Error.WriteLine("[INFO] PipeMux.Broker starting...");
+
+try {
+    JsonRpc.VerifyRuntimeAvailable();
+}
+catch (Exception ex) {
+    Console.Error.WriteLine($"[FATAL] JSON protocol initialization failed: {ex.Message}");
+    return 1;
+}
 
 var config = ConfigLoader.Load();
 Console.Error.WriteLine($"[INFO] Loaded config: {config.Apps.Count} apps registered");
@@ -25,3 +34,5 @@ try {
 catch (OperationCanceledException) {
     Console.Error.WriteLine("[INFO] Broker stopped gracefully");
 }
+
+return 0;

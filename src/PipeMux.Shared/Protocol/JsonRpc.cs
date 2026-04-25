@@ -13,6 +13,17 @@ public static class JsonRpc {
         WriteIndented = false
     };
 
+    public static void VerifyRuntimeAvailable() {
+        _ = SerializeRequest(new Request {
+            App = "__warmup__",
+            Args = []
+        });
+
+        _ = DeserializeRequest("""{"app":"__warmup__","args":[],"requestId":"warmup"}""");
+        _ = SerializeResponse(Response.Ok("warmup", "ok"));
+        _ = DeserializeResponse("""{"requestId":"warmup","success":true,"data":"ok"}""");
+    }
+
     /// <summary>
     /// 序列化请求为 JSON
     /// </summary>

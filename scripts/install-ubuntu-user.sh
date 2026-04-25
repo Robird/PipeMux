@@ -75,16 +75,110 @@ write_cli_wrapper() {
 set -euo pipefail
 
 SERVICE_NAME="pipemux-broker.service"
+STARTUP_WAIT_SECONDS="\${PIPEMUX_STARTUP_WAIT_SECONDS:-5}"
 
-if [[ "\${PIPEMUX_NO_AUTOSTART:-0}" != "1" ]] && command -v systemctl >/dev/null 2>&1; then
-    if systemctl --user --quiet is-enabled "\$SERVICE_NAME" 2>/dev/null || systemctl --user --quiet is-active "\$SERVICE_NAME" 2>/dev/null; then
-        if ! systemctl --user --quiet is-active "\$SERVICE_NAME" 2>/dev/null; then
-            systemctl --user start "\$SERVICE_NAME" >/dev/null 2>&1 || true
+service_is_managed() {
+    systemctl --user --quiet is-enabled "\$SERVICE_NAME" 2>/dev/null || systemctl --user --quiet is-active "\$SERVICE_NAME" 2>/dev/null
+}
+
+wait_for_service_active() {
+    local deadline=\$((SECONDS + STARTUP_WAIT_SECONDS))
+    while (( SECONDS < deadline )); do
+        if systemctl --user --quiet is-active "\$SERVICE_NAME" 2>/dev/null; then
+            return 0
+        fi
+
+        sleep 0.2
+    done
+
+    systemctl --user --quiet is-active "\$SERVICE_NAME" 2>/dev/null
+}
+
+ensure_broker_started() {
+    if [[ "\${PIPEMUX_NO_AUTOSTART:-0}" == "1" ]] || ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if ! service_is_managed; then
+        return 0
+    fi
+
+    if ! systemctl --user --quiet is-active "\$SERVICE_NAME" 2>/dev/null; then
+        systemctl --user start "\$SERVICE_NAME" >/dev/null 2>&1 || true
+        wait_for_service_active || true
+    fi
+}
+
+should_retry_after_failure() {
+    local stderr_file="\$1"
+    grep -Eq '^Error: (Broker returned empty response|Broker not running:|Connection timeout: Broker not responding|Communication error:)' "\$stderr_file"
+}
+
+recover_broker_service() {
+    if [[ "\${PIPEMUX_NO_AUTOSTART:-0}" == "1" ]] || ! command -v systemctl >/dev/null 2>&1; then
+        return 1
+    fi
+
+    if ! service_is_managed; then
+        return 1
+    fi
+
+    if systemctl --user --quiet is-active "\$SERVICE_NAME" 2>/dev/null; then
+        systemctl --user restart "\$SERVICE_NAME" >/dev/null 2>&1 || return 1
+    else
+        systemctl --user start "\$SERVICE_NAME" >/dev/null 2>&1 || return 1
+    fi
+
+    wait_for_service_active
+}
+
+run_cli_once() {
+    local stdout_file="\$1"
+    local stderr_file="\$2"
+    shift 2
+
+    if "$exec_path" "\$@" >"\$stdout_file" 2>"\$stderr_file"; then
+        return 0
+    fi
+
+    return \$?
+}
+
+run_cli_with_recovery() {
+    local stdout_file
+    local stderr_file
+    local status
+
+    stdout_file="\$(mktemp)"
+    stderr_file="\$(mktemp)"
+    trap 'rm -f "\$stdout_file" "\$stderr_file"' RETURN
+
+    if run_cli_once "\$stdout_file" "\$stderr_file" "\$@"; then
+        cat "\$stdout_file"
+        return 0
+    else
+        status=\$?
+    fi
+
+    if should_retry_after_failure "\$stderr_file" && recover_broker_service; then
+        : >"\$stdout_file"
+        : >"\$stderr_file"
+
+        if run_cli_once "\$stdout_file" "\$stderr_file" "\$@"; then
+            cat "\$stdout_file"
+            return 0
+        else
+            status=\$?
         fi
     fi
-fi
 
-exec "$exec_path" "\$@"
+    cat "\$stdout_file"
+    cat "\$stderr_file" >&2
+    return \$status
+}
+
+ensure_broker_started
+run_cli_with_recovery "\$@"
 EOF
     chmod +x "$target_path"
 }
