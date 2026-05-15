@@ -6,9 +6,11 @@ var tests = new (string Name, Action Run)[] {
     ("register keeps --host alias compatible", RegisterParsesWithLegacyHostAlias),
     ("unregister accepts --stop before target app", UnregisterParsesWithLeadingStopFlag),
     ("unregister accepts --stop after target app", UnregisterParsesWithTrailingStopFlag),
+    ("reload parses without positional args", ReloadParsesWithoutArgs),
     ("register rejects missing host-path value", RegisterRejectsMissingHostPathValue),
     ("register rejects unknown option", RegisterRejectsUnknownOption),
     ("unregister rejects unknown option", UnregisterRejectsUnknownOption),
+    ("reload rejects unexpected positional args", ReloadRejectsUnexpectedArgs),
     ("register rejects missing positional args", RegisterRejectsMissingPositionals),
 };
 
@@ -72,6 +74,11 @@ static void UnregisterParsesWithTrailingStopFlag() {
     AssertTrue(command.Flag, "Flag");
 }
 
+static void ReloadParsesWithoutArgs() {
+    var command = RequireParsed(":reload");
+    AssertEqual(ManagementCommandKind.Reload, command.Kind, "Kind");
+}
+
 static void RegisterRejectsMissingHostPathValue() {
     AssertNull(Parse(":register", "counter", "Counter.dll", "Demo.Build", "--host-path"));
 }
@@ -82,6 +89,10 @@ static void RegisterRejectsUnknownOption() {
 
 static void UnregisterRejectsUnknownOption() {
     AssertNull(Parse(":unregister", "counter", "--force"));
+}
+
+static void ReloadRejectsUnexpectedArgs() {
+    AssertNull(Parse(":reload", "counter"));
 }
 
 static void RegisterRejectsMissingPositionals() {

@@ -97,7 +97,7 @@ echo "PipeMux Management Commands E2E Test"
 echo "======================================"
 echo ""
 
-echo "[1/10] Building required projects..."
+echo "[1/11] Building required projects..."
 cd "$ROOT_DIR"
 dotnet build PipeMux.sln --nologo > /dev/null
 echo "✅ Build successful"
@@ -120,14 +120,14 @@ chmod +x "$HOST_WRAPPER"
 export PATH="host-bin:$ORIGINAL_PATH"
 cd "$TEST_HOME"
 
-echo "[2/10] Starting isolated Broker..."
+echo "[2/11] Starting isolated Broker..."
 : > "$LOG_FILE"
 start_broker
 
 echo "✅ Broker started (PID: $BROKER_PID)"
 echo ""
 
-echo "[2.5/10] Verifying onboarding hints for empty state..."
+echo "[2.5/11] Verifying onboarding hints for empty state..."
 initial_list_output="$(run_cli :list)"
 assert_contains "$initial_list_output" "(no apps registered)" "initial :list empty state"
 assert_contains "$initial_list_output" "First-time setup:" "initial :list onboarding header"
@@ -141,11 +141,12 @@ help_output="$(run_cli :help)"
 assert_contains "$help_output" "First-time setup:" ":help onboarding header"
 assert_contains "$help_output" "[apps.counter]" ":help config snippet"
 assert_contains "$help_output" "pmux :register counter /absolute/path/to/MyApp.dll" ":help register example"
+assert_contains "$help_output" ":reload" ":help reload command"
 
 echo "✅ Empty-state onboarding is present"
 echo ""
 
-echo "[3/10] Registering PipeMux.Host-managed app without --host-path..."
+echo "[3/11] Registering PipeMux.Host-managed app without --host-path..."
 register_output="$(run_cli :register counter "$HOST_DLL" HostDemo.DebugEntries.BuildCounter)"
 assert_contains "$register_output" "Registered app 'counter'" "register command"
 
@@ -172,7 +173,27 @@ fi
 echo "✅ Register persisted to broker.toml"
 echo ""
 
-echo "[4/10] Verifying config reload after broker restart without PATH hint..."
+echo "[4/11] Verifying manual broker.toml edits can be reloaded without restarting broker..."
+RELOADED_ASSEMBLY_PATH="$TEST_HOME/manual-edit.dll"
+sed -i "s|^assembly_path = \".*\"$|assembly_path = \"$RELOADED_ASSEMBLY_PATH\"|" "$CONFIG_PATH"
+
+reload_output="$(run_cli :reload)"
+assert_contains "$reload_output" "Reloaded broker config:" ":reload success"
+
+list_after_reload_output="$(run_cli :list)"
+assert_contains "$list_after_reload_output" "Assembly: $RELOADED_ASSEMBLY_PATH (file not found)" ":list should reflect reloaded assembly_path"
+
+sed -i "s|^assembly_path = \".*\"$|assembly_path = \"$HOST_DLL\"|" "$CONFIG_PATH"
+reload_restore_output="$(run_cli :reload)"
+assert_contains "$reload_restore_output" "Reloaded broker config:" ":reload restore success"
+
+restored_list_output="$(run_cli :list)"
+assert_contains "$restored_list_output" "Assembly: $HOST_DLL" ":list should reflect restored assembly_path"
+
+echo "✅ Reload picked up hand-edited broker.toml"
+echo ""
+
+echo "[5/11] Verifying config reload after broker restart without PATH hint..."
 export PATH="$ORIGINAL_PATH"
 cd "$ROOT_DIR"
 stop_broker
@@ -189,7 +210,7 @@ fi
 echo "✅ Broker reloaded broker.toml after restart"
 echo ""
 
-echo "[5/10] Verifying list and invoke path..."
+echo "[6/11] Verifying list and invoke path..."
 list_output="$(run_cli :list)"
 assert_contains "$list_output" "counter" ":list after register"
 
@@ -201,7 +222,7 @@ fi
 echo "✅ Registered app listed and invoked successfully"
 echo ""
 
-echo "[5.5/10] Verifying re-register guidance when an instance is still running..."
+echo "[6.5/11] Verifying re-register guidance when an instance is still running..."
 if rereg_output="$(run_cli :register counter "$HOST_DLL" HostDemo.DebugEntries.BuildCounter 2>&1)"; then
     fail "re-register of an existing app should fail"
 fi
@@ -212,7 +233,7 @@ assert_contains "$rereg_output" "pmux :unregister counter --stop" "re-register u
 echo "✅ Re-register surfaces actionable guidance"
 echo ""
 
-echo "[6/10] Verifying multi-terminal restart preserves isolated instances..."
+echo "[7/11] Verifying multi-terminal restart preserves isolated instances..."
 stop_output="$(run_cli :stop counter)"
 assert_contains "$stop_output" "Stopped:" ":stop before multi-terminal restart test"
 
@@ -250,7 +271,7 @@ fi
 echo "✅ Restart keeps per-terminal instances isolated"
 echo ""
 
-echo "[7/10] Verifying :restart does not implicitly start a stopped app..."
+echo "[8/11] Verifying :restart does not implicitly start a stopped app..."
 stop_after_restart_test="$(run_cli :stop counter)"
 assert_contains "$stop_after_restart_test" "Stopped 2 processes for: counter" ":stop after restart test"
 
@@ -275,7 +296,7 @@ if [[ "$terminal_b_restarted" != "Counter: 1" ]]; then
     fail "terminal B after failed restart should cold-start: expected 'Counter: 1', got '$terminal_b_restarted'"
 fi
 
-echo "[8/10] Verifying unregister protection..."
+echo "[9/11] Verifying unregister protection..."
 if unregister_output="$(run_cli :unregister counter 2>&1)"; then
     fail ":unregister without --stop should have failed"
 fi
@@ -284,7 +305,7 @@ assert_contains "$unregister_output" "has 2 running process(es)" "unregister pro
 echo "✅ Running process was protected from accidental unregister"
 echo ""
 
-echo "[9/10] Unregistering with --stop..."
+echo "[10/11] Unregistering with --stop..."
 unregister_stop_output="$(run_cli :unregister counter --stop)"
 assert_contains "$unregister_stop_output" "Unregistered app 'counter'" "unregister --stop"
 assert_contains "$unregister_stop_output" "stopped 2 process(es)" "unregister --stop count"
@@ -296,7 +317,7 @@ fi
 echo "✅ App stopped and removed from broker.toml"
 echo ""
 
-echo "[10/10] Verifying post-unregister state..."
+echo "[11/11] Verifying post-unregister state..."
 final_list_output="$(run_cli :list)"
 assert_contains "$final_list_output" "(no apps registered)" "final :list"
 assert_contains "$final_list_output" "First-time setup:" "final :list onboarding header"

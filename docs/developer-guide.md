@@ -56,6 +56,7 @@ dotnet run --project src/PipeMux.Broker -c Debug
 Broker 会读取 `~/.config/pipemux/broker.toml`，并在首次请求某个 app 时按配置启动对应进程。
 
 对于需要 DLL 监视、stale-check 和 `auto_restart` 的 app，`assembly_path` 是正式配置字段。当前实现不再从 `command` 反推主程序集路径。
+手工写 TOML 时注意不要把它写成 shell/JSON 风格的 `assembly_path = \"/path/to/App.dll\"`；这里应是普通 TOML 字符串 `assembly_path = "/path/to/App.dll"`。
 
 ## 4. 调用 CLI
 
@@ -74,10 +75,12 @@ dotnet run --project src/PipeMux.CLI -c Debug -- :ps
 ```bash
 dotnet run --project src/PipeMux.CLI -c Debug -- :stop calculator
 dotnet run --project src/PipeMux.CLI -c Debug -- :restart calculator
+dotnet run --project src/PipeMux.CLI -c Debug -- :reload
 dotnet run --project src/PipeMux.CLI -c Debug -- :help
 ```
 
 注意：`:restart` 只重启当前运行中的实例；如果 app 已注册但当前没有运行实例，它会返回失败，而不是隐式启动一个默认实例。
+注意：`:reload` 会重新读取 `broker.toml` 的 app 配置、更新内存视图并重建 watcher；如果你改的是 `[broker]` 的 `socket_path` / `pipe_name`，当前 broker 监听端点不会热切换，仍要完整重启 broker 进程。
 
 ## 5. 调试由 PipeMux.Host 托管的 DLL
 
@@ -113,6 +116,12 @@ timeout = 30
 ```
 
 `auto_restart = true` 时，Broker 只监视 `assembly_path` 指向的文件；如果当前没有运行实例，则只会在 `auto_start = true` 时补起默认实例。
+
+手工改完 `broker.toml` 后，如果你只是想让 broker 接受新的 `[apps.*]` 配置，不必重启整个进程，直接执行：
+
+```bash
+dotnet run --project src/PipeMux.CLI -c Debug -- :reload
+```
 
 ## 6. 终端隔离调试
 

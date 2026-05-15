@@ -34,6 +34,7 @@ pmux :register counter \
 如果你是手写 `broker.toml`，优先写 `PipeMux.Host` 的绝对路径，不要假设 broker 服务启动时一定能从 PATH 找到 `pmux-host`。
 
 对于由 `PipeMux.Host` 托管的 DLL，`broker.toml` 里还应同时写出 `assembly_path`。这是 Broker 用来做文件监视、`:list` / `:ps` 状态展示和“进程是否已落后于 DLL”判断的正式字段。
+这里的 `assembly_path` 是 TOML 字符串，直接写普通双引号即可，不要额外转义成 `\\\"...\\\"`。
 
 例如：
 
@@ -64,12 +65,15 @@ pmux counter get      # Counter: 2
 | 查看现在哪些 app 进程在跑 | `pmux :ps` |
 | 停掉某个 app 的所有实例 | `pmux :stop <name>` |
 | 重启某个 app 当前正在运行的实例 | `pmux :restart <name>` |
+| 重新读取手工编辑后的 `broker.toml` | `pmux :reload` |
 | 注销 app（可选同时 `--stop`） | `pmux :unregister <name> --stop` |
 | 看完整命令清单 | `pmux :help` |
 
 注意：`pmux :list` 与 `pmux :help` 的输出会内嵌"First-time setup"引导（包含针对当前环境的精确示例），LLM Agent 可直接据此自驱动。
 
 注意：`pmux :restart <name>` 只会重启“当前已经在跑”的实例；如果 app 已注册但现在没在跑，它会失败，而不会顺手帮你启动一个默认实例。
+
+注意：`pmux :reload` 会重新读取 `broker.toml` 的 app 配置并重建相关 watcher，但不会把当前 broker 的监听 socket/pipe 热切换到新的 `[broker]` 设置；如果你改了 `socket_path` / `pipe_name`，仍需要完整重启 broker。
 
 ## 4. 多终端隔离
 
@@ -93,11 +97,14 @@ pmux counter get
 | 调用 app 一直挂起或失败 | `systemctl --user status pipemux-broker` 是否 `active` |
 | Broker 起不来 / 不响应 | `journalctl --user -u pipemux-broker -n 100` 看错误 |
 | 提示 app 未注册 | `pmux :list` 确认；必要时 `pmux :register ...` |
+| 手工改了 `broker.toml` 但 broker 没反应 | 先执行 `pmux :reload`；如果改的是 `[broker]` 端点设置，则改用 `systemctl --user restart pipemux-broker` |
 | 改了 DLL 代码但行为没变 | 先看 `pmux :list` / `pmux :ps` 是否提示程序集晚于进程；若 app 正在运行，用 `pmux :restart <app>` 立即重载，或 `pmux :stop <app>` 后等待下次调用再冷启动 |
 | `:register` 报 "App already registered" | 错误消息已经给了下一步命令，按提示走 |
 | 想完全重置 broker 状态 | `systemctl --user restart pipemux-broker` |
 
 如果你希望“DLL 一改、Broker 就自动重启当前实例”，可以在 `broker.toml` 里把该 app 的 `auto_restart = true`。它只会监视 `assembly_path` 指向的文件；若当前没有运行实例，则只会在 `auto_start = true` 时补起默认实例。
+
+如果日志里出现 `Failed to parse broker config` 或 `Unexpected token '\' for a value`，通常是某个字段被写成了 `assembly_path = \"/path/to/App.dll\"`。把它改回 `assembly_path = "/path/to/App.dll"` 后，再执行 `pmux :reload` 或 `systemctl --user restart pipemux-broker` 即可。
 
 ## 进一步
 

@@ -12,6 +12,8 @@ public enum ManagementCommandKind {
     Stop,
     /// <summary>重启指定应用</summary>
     Restart,
+    /// <summary>重新加载 broker.toml 配置</summary>
+    Reload,
     /// <summary>注册应用并写入配置</summary>
     Register,
     /// <summary>移除已注册应用并写入配置</summary>
@@ -119,6 +121,7 @@ public sealed class ManagementCommand {
             "ps" => new ManagementCommand { Kind = ManagementCommandKind.Ps },
             "stop" => new ManagementCommand { Kind = ManagementCommandKind.Stop, TargetApp = targetApp },
             "restart" => new ManagementCommand { Kind = ManagementCommandKind.Restart, TargetApp = targetApp },
+            "reload" => positional.Count == 0 ? new ManagementCommand { Kind = ManagementCommandKind.Reload } : null,
             "help" or "h" or "?" => new ManagementCommand { Kind = ManagementCommandKind.Help },
             _ => null
         };

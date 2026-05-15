@@ -11,7 +11,16 @@ catch (Exception ex) {
     return 1;
 }
 
-var config = ConfigLoader.Load();
+BrokerConfig config;
+try {
+    config = ConfigLoader.Load();
+}
+catch (Exception ex) {
+    Console.Error.WriteLine($"[FATAL] {ex.Message}");
+    Console.Error.WriteLine("[FATAL] Fix broker.toml and restart the broker service.");
+    return 1;
+}
+
 Console.Error.WriteLine($"[INFO] Loaded config: {config.Apps.Count} apps registered");
 
 var registry = new ProcessRegistry();

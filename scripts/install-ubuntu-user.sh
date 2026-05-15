@@ -129,7 +129,19 @@ recover_broker_service() {
         systemctl --user start "\$SERVICE_NAME" >/dev/null 2>&1 || return 1
     fi
 
-    wait_for_service_active
+    if wait_for_service_active; then
+        return 0
+    fi
+
+    if command -v journalctl >/dev/null 2>&1; then
+        echo "Broker service failed to become active. Recent logs:" >&2
+        journalctl --user -u "\$SERVICE_NAME" -n 20 --no-pager >&2 || true
+    else
+        echo "Broker service failed to become active. Current status:" >&2
+        systemctl --user status "\$SERVICE_NAME" --no-pager >&2 || true
+    fi
+
+    return 1
 }
 
 run_cli_once() {

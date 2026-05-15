@@ -16,8 +16,28 @@ public sealed class BrokerConfigStore {
         _configPath = configPath ?? BrokerConnectionDefaults.GetConfigPath();
     }
 
+    public BrokerConnectionSettings Broker => _config.Broker;
+
     /// <summary>当前已注册 app 的只读视图（不复制；调用方需在 gate 内访问）。</summary>
     public IReadOnlyDictionary<string, AppSettings> Apps => _config.Apps;
+
+    public bool TryReadConfigFromDisk(out BrokerConfig config, out string error) {
+        try {
+            config = ConfigLoader.Load(_configPath);
+            error = string.Empty;
+            return true;
+        }
+        catch (Exception ex) {
+            config = null!;
+            error = ex.Message;
+            return false;
+        }
+    }
+
+    public void ApplyReloadedConfig(BrokerConfig config) {
+        _config.Broker = CloneBrokerSettings(config.Broker);
+        _config.Apps = CloneApps(config.Apps);
+    }
 
     public bool TryRegisterApp(string appName, AppSettings settings, out string message) {
         if (_config.Apps.ContainsKey(appName)) {
@@ -67,6 +87,13 @@ public sealed class BrokerConfigStore {
             AutoStart = settings.AutoStart,
             AutoRestart = settings.AutoRestart,
             Timeout = settings.Timeout
+        };
+    }
+
+    internal static BrokerConnectionSettings CloneBrokerSettings(BrokerConnectionSettings settings) {
+        return new BrokerConnectionSettings {
+            SocketPath = settings.SocketPath,
+            PipeName = settings.PipeName
         };
     }
 

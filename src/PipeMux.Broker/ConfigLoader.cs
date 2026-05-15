@@ -1,4 +1,5 @@
 using PipeMux.Shared;
+using Tomlyn;
 
 namespace PipeMux.Broker;
 
@@ -9,12 +10,23 @@ public static class ConfigLoader {
     /// <summary>
     /// 加载配置 (从 ~/.config/pipemux/broker.toml 或默认配置)
     /// </summary>
-    public static BrokerConfig Load() {
-        var configPath = BrokerConnectionDefaults.GetConfigPath();
+    public static BrokerConfig Load(string? configPath = null) {
+        configPath ??= BrokerConnectionDefaults.GetConfigPath();
 
         if (File.Exists(configPath)) {
-            var toml = File.ReadAllText(configPath);
-            return BrokerConfigTomlCodec.Deserialize(toml);
+            try {
+                var toml = File.ReadAllText(configPath);
+                return BrokerConfigTomlCodec.Deserialize(toml);
+            }
+            catch (TomlException ex) {
+                throw new InvalidOperationException(
+                    $"Failed to parse broker config '{configPath}': {ex.Message}{Environment.NewLine}" +
+                    "TOML strings should look like assembly_path = \"/absolute/path/to/MyApp.dll\" and must not be written as \\\"...\\\".",
+                    ex);
+            }
+            catch (Exception ex) {
+                throw new InvalidOperationException($"Failed to load broker config '{configPath}': {ex.Message}", ex);
+            }
         }
 
         // P0 Fix: Warn when config file is missing

@@ -72,6 +72,7 @@ timeout = 30
 - “DLL 已更新但后台进程还没重载”的 stale 检查
 
 当前实现不再从 `command` 反推程序集路径；如果你是手写 `broker.toml`，请把 `command` 和 `assembly_path` 一起维护。
+注意这里是 TOML，不是 shell 或 JSON 字面量：应写成 `assembly_path = "/path/to/App.dll"`，不要写成 `assembly_path = \"/path/to/App.dll\"`。
 
 如需临时覆盖连接方式，可设置环境变量：
 
@@ -122,6 +123,7 @@ journalctl --user -u pipemux-broker -f
 pmux :list
 pmux :ps
 pmux :restart calculator
+pmux :reload
 pmux calculator push 10
 ```
 
@@ -177,6 +179,20 @@ pmux :restart counter
 ```
 
 注意：`:restart` 只重启当前正在运行的实例；如果 app 已注册但当前没有运行实例，它会失败，而不会隐式帮你启动一个默认实例。
+
+如果你是手工编辑了 `broker.toml`（例如补 `assembly_path`、修改 `auto_restart` 或新增 app），可以先执行：
+
+```bash
+pmux :reload
+```
+
+它会让当前 broker 重新读取 app 配置并重建 watcher，通常不需要完整重启服务。只有当你改的是 `[broker]` 里的 `socket_path` / `pipe_name` 这类监听端点设置时，才仍然需要：
+
+```bash
+systemctl --user restart pipemux-broker
+```
+
+如果 broker 因配置错误起不来，新的 `pmux` wrapper 也会在自动拉起失败时把最近的 `journalctl --user -u pipemux-broker` 日志直接打出来；最常见的问题就是手工编辑时把 TOML 字符串误写成了 `\\\"...\\\"`。
 
 如果你是在脚本、CI 或其他非交互环境里调用 CLI，建议显式指定终端标识，避免每次命中不同会话：
 

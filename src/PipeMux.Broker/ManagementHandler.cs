@@ -28,6 +28,7 @@ public sealed class ManagementHandler {
             ManagementCommandKind.Ps => HandlePsAsync(request),
             ManagementCommandKind.Stop => HandleStopAsync(request, command.TargetApp),
             ManagementCommandKind.Restart => HandleRestartAsync(request, command.TargetApp),
+            ManagementCommandKind.Reload => HandleReloadAsync(request),
             ManagementCommandKind.Register => HandleRegisterAsync(request, command),
             ManagementCommandKind.Unregister => HandleUnregisterAsync(request, command),
             ManagementCommandKind.Help => HandleHelpAsync(request),
@@ -204,6 +205,13 @@ public sealed class ManagementHandler {
     }
 
     /// <summary>
+    /// :reload - 重新读取 broker.toml
+    /// </summary>
+    private Task<Response> HandleReloadAsync(Request request) {
+        return Task.FromResult(CreateOperationResponse(request.RequestId, _coordinator.ReloadConfig()));
+    }
+
+    /// <summary>
     /// :register - 注册一个由 PipeMux.Host 托管的 app
     /// </summary>
     private Task<Response> HandleRegisterAsync(Request request, ManagementCommand command) {
@@ -258,6 +266,7 @@ public sealed class ManagementHandler {
         sb.AppendLine("  :ps            List running processes");
         sb.AppendLine("  :stop <app>    Stop processes for an application");
         sb.AppendLine("  :restart <app> Restart running instances for an application");
+        sb.AppendLine("  :reload        Reload broker.toml app config without restarting broker");
         sb.AppendLine("  :register <app> <assembly> <entry> [--host-path <pmux-host-path>]");
         sb.AppendLine("                 Register an app hosted by PipeMux.Host");
         sb.AppendLine("  :unregister <app> [--stop]");

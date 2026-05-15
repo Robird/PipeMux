@@ -1,3 +1,4 @@
+using PipeMux.Shared;
 using PipeMux.Shared.Protocol;
 
 namespace PipeMux.Broker;
@@ -21,12 +22,12 @@ public sealed class BrokerCoordinator {
     /// 在 Broker 启动后调用。
     /// </summary>
     public void StartAutoRestartWatchers() {
-        var autoRestartApps = SnapshotRegisteredApps()
-            .Where(kv => kv.Value.AutoRestart)
-            .ToList();
-
-        foreach (var (appName, settings) in autoRestartApps) {
-            StartWatcherForApp(appName, settings);
+        lock (_brokerGate) {
+            foreach (var (appName, settings) in _configStore.Apps
+                         .Where(kv => kv.Value.AutoRestart)
+                         .OrderBy(kv => kv.Key, StringComparer.Ordinal)) {
+                StartWatcherForApp_NoLock(appName, settings);
+            }
         }
     }
 
@@ -35,31 +36,13 @@ public sealed class BrokerCoordinator {
     /// </summary>
     public void StopAllWatchers() {
         lock (_brokerGate) {
-            foreach (var (_, watcher) in _watchers) {
-                watcher.Dispose();
-            }
-            _watchers.Clear();
+            StopAllWatchers_NoLock();
         }
     }
 
     private void StartWatcherForApp(string appName, AppSettings settings) {
-        if (string.IsNullOrWhiteSpace(settings.AssemblyPath)) {
-            Console.Error.WriteLine($"[WARN] Cannot determine assembly path for auto_restart app '{appName}', skipping watch");
-            return;
-        }
-
         lock (_brokerGate) {
-            if (_watchers.ContainsKey(appName)) {
-                _watchers[appName].Dispose();
-                _watchers.Remove(appName);
-            }
-
-            var watcher = new AssemblyWatcher(settings.AssemblyPath, async () => {
-                await HandleAutoRestart(appName, settings);
-            });
-
-            _watchers[appName] = watcher;
-            watcher.Start();
+            StartWatcherForApp_NoLock(appName, settings);
         }
     }
 
@@ -247,6 +230,90 @@ public sealed class BrokerCoordinator {
         }
     }
 
+    public BrokerOperationResult ReloadConfig() {
+        lock (_brokerGate) {
+            if (!_configStore.TryReadConfigFromDisk(out var reloadedConfig, out var error)) {
+                return BrokerOperationResult.Fail($"Failed to reload broker config: {error}");
+            }
+
+            var previousBroker = BrokerConfigStore.CloneBrokerSettings(_configStore.Broker);
+            var previousApps = _configStore.Apps
+                .ToDictionary(kv => kv.Key, kv => BrokerConfigStore.CloneAppSettings(kv.Value), StringComparer.Ordinal);
+            var runningProcessesBeforeReload = SnapshotActiveProcesses_NoLock();
+
+            StopAllWatchers_NoLock();
+            _configStore.ApplyReloadedConfig(reloadedConfig);
+
+            foreach (var (appName, settings) in _configStore.Apps
+                         .Where(kv => kv.Value.AutoRestart)
+                         .OrderBy(kv => kv.Key, StringComparer.Ordinal)) {
+                StartWatcherForApp_NoLock(appName, settings);
+            }
+
+            var autoStartedApps = new List<string>();
+            var autoStartFailures = new List<string>();
+
+            foreach (var (appName, settings) in _configStore.Apps
+                         .Where(kv => kv.Value.AutoStart)
+                         .OrderBy(kv => kv.Key, StringComparer.Ordinal)) {
+                if (FindMatchingKeys_NoLock(appName).Count > 0) {
+                    continue;
+                }
+
+                var result = EnsureDefaultInstanceStarted_NoLock(appName);
+                if (result.Success) {
+                    autoStartedApps.Add(appName);
+                }
+                else {
+                    autoStartFailures.Add($"{appName}: {result.Message}");
+                }
+            }
+
+            var removedAppsWithRunningProcesses = previousApps.Keys
+                .Except(_configStore.Apps.Keys, StringComparer.Ordinal)
+                .Where(appName => runningProcessesBeforeReload.Any(process => process.AppName == appName))
+                .OrderBy(static name => name, StringComparer.Ordinal)
+                .ToList();
+
+            var changedAppsWithRunningProcesses = _configStore.Apps
+                .Where(kv => previousApps.TryGetValue(kv.Key, out var previous)
+                    && !AppSettingsEqual(previous, kv.Value)
+                    && runningProcessesBeforeReload.Any(process => process.AppName == kv.Key))
+                .Select(kv => kv.Key)
+                .OrderBy(static name => name, StringComparer.Ordinal)
+                .ToList();
+
+            var messageLines = new List<string> {
+                $"Reloaded broker config: {_configStore.Apps.Count} app(s) registered."
+            };
+
+            if (autoStartedApps.Count > 0) {
+                messageLines.Add($"Auto-started after reload: {string.Join(", ", autoStartedApps)}");
+            }
+
+            if (autoStartFailures.Count > 0) {
+                messageLines.Add($"Auto-start failures after reload: {string.Join("; ", autoStartFailures)}");
+            }
+
+            if (removedAppsWithRunningProcesses.Count > 0) {
+                messageLines.Add(
+                    $"Removed from config but still running: {string.Join(", ", removedAppsWithRunningProcesses)}. Run `pmux :stop <app>` if you want to terminate them.");
+            }
+
+            if (changedAppsWithRunningProcesses.Count > 0) {
+                messageLines.Add(
+                    $"Updated config detected for running apps: {string.Join(", ", changedAppsWithRunningProcesses)}. Existing processes were kept; run `pmux :restart <app>` to apply launcher/assembly changes.");
+            }
+
+            if (!BrokerSettingsEqual(previousBroker, _configStore.Broker)) {
+                messageLines.Add(
+                    "Broker endpoint settings changed in memory, but the current listening socket/pipe will not move until the broker process is fully restarted.");
+            }
+
+            return BrokerOperationResult.Ok(string.Join("\n", messageLines));
+        }
+    }
+
     public bool TryGetRegisterConflict(string appName, out BrokerOperationResult conflict) {
         lock (_brokerGate) {
             return TryGetRegisterConflict_NoLock(appName, out conflict);
@@ -396,6 +463,31 @@ public sealed class BrokerCoordinator {
             .ToList();
     }
 
+    private void StartWatcherForApp_NoLock(string appName, AppSettings settings) {
+        if (string.IsNullOrWhiteSpace(settings.AssemblyPath)) {
+            Console.Error.WriteLine($"[WARN] Cannot determine assembly path for auto_restart app '{appName}', skipping watch");
+            return;
+        }
+
+        if (_watchers.Remove(appName, out var existingWatcher)) {
+            existingWatcher.Dispose();
+        }
+
+        var watcher = new AssemblyWatcher(settings.AssemblyPath, async () => {
+            await HandleAutoRestart(appName, settings);
+        });
+
+        _watchers[appName] = watcher;
+        watcher.Start();
+    }
+
+    private void StopAllWatchers_NoLock() {
+        foreach (var (_, watcher) in _watchers) {
+            watcher.Dispose();
+        }
+        _watchers.Clear();
+    }
+
     private BrokerOperationResult RestartProcessKeys_NoLock(string appName, IReadOnlyList<string> matchingKeys) {
         foreach (var key in matchingKeys) {
             if (_registry.Close(key)) {
@@ -450,6 +542,19 @@ public sealed class BrokerCoordinator {
 
         conflict = BrokerOperationResult.Fail(hint);
         return true;
+    }
+
+    private static bool AppSettingsEqual(AppSettings left, AppSettings right) {
+        return string.Equals(left.Command, right.Command, StringComparison.Ordinal)
+            && string.Equals(left.AssemblyPath, right.AssemblyPath, StringComparison.Ordinal)
+            && left.AutoStart == right.AutoStart
+            && left.AutoRestart == right.AutoRestart
+            && left.Timeout == right.Timeout;
+    }
+
+    private static bool BrokerSettingsEqual(BrokerConnectionSettings left, BrokerConnectionSettings right) {
+        return string.Equals(left.SocketPath, right.SocketPath, StringComparison.Ordinal)
+            && string.Equals(left.PipeName, right.PipeName, StringComparison.Ordinal);
     }
 }
 

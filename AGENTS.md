@@ -45,6 +45,7 @@ Broker and Front of Stateful CLI Apps —— 通过 Named Pipe / Unix Domain Soc
 - `BrokerConfigStore` = 内存视图 + 原子落盘，**不持有锁**。
 - `BrokerConfigTomlCodec` 是 `BrokerConfig <-> TOML` 的唯一编解码点，`ConfigLoader` 与 `BrokerConfigStore` 都走它。
 - 写入采用副本-落盘成功后再提交内存，避免内存/磁盘分叉。
+- `:reload` 重新读取 `broker.toml` 时只热更新 broker 的**app 配置内存视图**与 watcher；`[broker]` 端点设置若有改动，**必须完整重启 broker 进程**后监听端点才会切换。
 
 ### 管理命令编排
 责任链（不要跨层倒灌）：
@@ -91,6 +92,11 @@ Broker and Front of Stateful CLI Apps —— 通过 Named Pipe / Unix Domain Soc
 
 ## 最新进展（最多保留 3 条）
 
+### 2026-05-15 — `:reload` 支持手工编辑 broker.toml 后热更新 app 配置 ✅
+- 新增 `pmux :reload`：broker 运行中可重新读取 `broker.toml`，替换内存中的 app 配置并重建 `auto_restart` watchers；对新配置里 `auto_start=true` 且当前未运行的 app，会补起默认实例。
+- `:reload` **不会**热切换当前 broker 的监听 socket/pipe；若 `[broker]` 里的 `socket_path` / `pipe_name` 改了，仍需完整重启 broker。CLI 自身每次请求仍按磁盘上的 `[broker]` 配置解析端点。
+- 验证：parser 11/11，management E2E 11/11；覆盖“broker 运行中手改 `assembly_path` 后 `pmux :reload` 生效”。 
+
 ### 2026-05-15 — `AssemblyPath` 显式化 + restart/状态读路径收敛 ✅
 - `AppSettings.AssemblyPath` 升格为正式配置字段；`auto_restart`、`:list`、`:ps` 的程序集信息与 stale 判断**只**读它，不再从 `Command` 反推。
 - `:restart` 语义收紧为“只重启当前运行中的实例”；不再对已注册但未运行的 app 隐式 `start`。`auto_restart` 的“当前无实例”分支则仅在 `AutoStart=true` 时补起默认实例。
@@ -102,9 +108,3 @@ Broker and Front of Stateful CLI Apps —— 通过 Named Pipe / Unix Domain Soc
 - `:help` / `:list` first-time setup 现在把两件事分开：`:register` 是否可省略 `--host-path`，以及 broker.toml 示例是否可安全写裸 `pmux-host`。**只有 broker 自身 PATH 真能解析 `pmux-host` 时，配置示例才会显示裸命令；否则显示 broker 可直接执行的绝对路径。**
 - `PathHelper.TryFindOnPath` 抽出共用，`ManagementHandler` 内重复 PATH 扫描代码删除。
 - 验证：parser 9/9，E2E 含新断言 8/8；覆盖"无 `--host-path` 注册、broker.toml 持久化绝对路径、移除 PATH 提示后重启仍可调用"。
-
-### 2026-04-21 — System.CommandLine 升级到 2.0.6 ✅
-- 全仓 `System.CommandLine` 包统一升到 `2.0.6`（CLI 之前还停留在 beta4，Sdk/HostDemo 在 beta5）。
-- 按 [beta5+ migration guide](https://learn.microsoft.com/en-us/dotnet/standard/commandline/migration-guide-2.0.0-beta5) 完成 API 迁移：`SetHandler/InvocationContext/AddArgument` → `SetAction/ParseResult/Arguments.Add`；`CommandLineConfiguration` → `InvocationConfiguration`；`parseResult.Configuration.Output` → `parseResult.InvocationConfiguration.Output`。
-- 验证：`dotnet build PipeMux.sln` 0w/0e；parser 与 E2E 两个测试脚本均通过。
-- API 模式已沉淀到上节"关键库 API 模式备忘"。
