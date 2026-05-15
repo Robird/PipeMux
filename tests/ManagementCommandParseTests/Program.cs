@@ -7,9 +7,11 @@ var tests = new (string Name, Action Run)[] {
     ("unregister accepts --stop before target app", UnregisterParsesWithLeadingStopFlag),
     ("unregister accepts --stop after target app", UnregisterParsesWithTrailingStopFlag),
     ("reload parses without positional args", ReloadParsesWithoutArgs),
+    ("copy-env-to-broker parses multiple env names", CopyEnvToBrokerParsesMultipleNames),
     ("register rejects missing host-path value", RegisterRejectsMissingHostPathValue),
     ("register rejects unknown option", RegisterRejectsUnknownOption),
     ("unregister rejects unknown option", UnregisterRejectsUnknownOption),
+    ("copy-env-to-broker rejects unknown option", CopyEnvToBrokerRejectsUnknownOption),
     ("reload rejects unexpected positional args", ReloadRejectsUnexpectedArgs),
     ("register rejects missing positional args", RegisterRejectsMissingPositionals),
 };
@@ -79,6 +81,14 @@ static void ReloadParsesWithoutArgs() {
     AssertEqual(ManagementCommandKind.Reload, command.Kind, "Kind");
 }
 
+static void CopyEnvToBrokerParsesMultipleNames() {
+    var command = RequireParsed(":copy-env-to-broker", "DEEPSEEK_API_KEY", "OPENAI_API_KEY");
+    AssertEqual(ManagementCommandKind.CopyEnvToBroker, command.Kind, "Kind");
+    AssertEqual(2, command.EnvironmentVariableNames.Length, "EnvironmentVariableNames.Length");
+    AssertEqual("DEEPSEEK_API_KEY", command.EnvironmentVariableNames[0], "EnvironmentVariableNames[0]");
+    AssertEqual("OPENAI_API_KEY", command.EnvironmentVariableNames[1], "EnvironmentVariableNames[1]");
+}
+
 static void RegisterRejectsMissingHostPathValue() {
     AssertNull(Parse(":register", "counter", "Counter.dll", "Demo.Build", "--host-path"));
 }
@@ -89,6 +99,10 @@ static void RegisterRejectsUnknownOption() {
 
 static void UnregisterRejectsUnknownOption() {
     AssertNull(Parse(":unregister", "counter", "--force"));
+}
+
+static void CopyEnvToBrokerRejectsUnknownOption() {
+    AssertNull(Parse(":copy-env-to-broker", "DEEPSEEK_API_KEY", "--force"));
 }
 
 static void ReloadRejectsUnexpectedArgs() {

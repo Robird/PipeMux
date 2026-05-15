@@ -124,6 +124,7 @@ pmux :list
 pmux :ps
 pmux :restart calculator
 pmux :reload
+pmux :copy-env-to-broker DEEPSEEK_API_KEY
 pmux calculator push 10
 ```
 
@@ -193,6 +194,14 @@ systemctl --user restart pipemux-broker
 ```
 
 如果 broker 因配置错误起不来，新的 `pmux` wrapper 也会在自动拉起失败时把最近的 `journalctl --user -u pipemux-broker` 日志直接打出来；最常见的问题就是手工编辑时把 TOML 字符串误写成了 `\\\"...\\\"`。
+
+如果某个由 broker/host 拉起的 app 需要读取 API key 或调试开关，不要依赖 `~/.bashrc`。因为 broker 是 `systemd --user` 服务，通常拿不到交互式 shell 的环境变量。现在可以直接用：
+
+```bash
+pmux :copy-env-to-broker DEEPSEEK_API_KEY OPENAI_API_KEY
+```
+
+它会把当前 CLI 环境中的这些变量写入 `~/.config/pipemux/broker.env`，并确保 `pipemux-broker.service.d/10-environment.conf` 引用这个文件。首次创建 drop-in 后，按提示执行 `systemctl --user daemon-reload && systemctl --user restart pipemux-broker`；之后只需 `systemctl --user restart pipemux-broker` 即可。
 
 如果你是在脚本、CI 或其他非交互环境里调用 CLI，建议显式指定终端标识，避免每次命中不同会话：
 

@@ -9,12 +9,14 @@ namespace PipeMux.Broker;
 public sealed class BrokerCoordinator {
     private readonly ProcessRegistry _registry;
     private readonly BrokerConfigStore _configStore;
+    private readonly BrokerServiceEnvironmentStore _serviceEnvironmentStore;
     private readonly object _brokerGate = new();
     private readonly Dictionary<string, AssemblyWatcher> _watchers = new(StringComparer.Ordinal);
 
     public BrokerCoordinator(BrokerConfig config, ProcessRegistry registry, string? configPath = null) {
         _registry = registry;
         _configStore = new BrokerConfigStore(config, configPath);
+        _serviceEnvironmentStore = new BrokerServiceEnvironmentStore();
     }
 
     /// <summary>
@@ -229,6 +231,39 @@ public sealed class BrokerCoordinator {
             }
 
             return BrokerOperationResult.Ok(message);
+        }
+    }
+
+    public BrokerOperationResult CopyEnvironmentToBroker(
+        IReadOnlyList<string> requestedNames,
+        IReadOnlyDictionary<string, string>? copiedValues
+    ) {
+        lock (_brokerGate) {
+            try {
+                const string brokerServiceCommandName = "pipemux-broker";
+                var result = _serviceEnvironmentStore.CopyFromCliEnvironment(requestedNames, copiedValues);
+                var messageLines = new List<string> {
+                    $"Copied {result.CopiedNames.Count} environment variable(s) to broker environment: {string.Join(", ", result.CopiedNames)}",
+                    $"Environment file: {result.EnvironmentFilePath}"
+                };
+
+                if (result.MissingNames.Count > 0) {
+                    messageLines.Add($"Missing in current CLI environment: {string.Join(", ", result.MissingNames)}");
+                }
+
+                if (result.DropInCreated) {
+                    messageLines.Add($"Systemd drop-in created: {result.DropInFilePath}");
+                    messageLines.Add($"Run `systemctl --user daemon-reload && systemctl --user restart {brokerServiceCommandName}` to apply changes.");
+                }
+                else {
+                    messageLines.Add($"Run `systemctl --user restart {brokerServiceCommandName}` to apply changes.");
+                }
+
+                return BrokerOperationResult.Ok(string.Join(Environment.NewLine, messageLines));
+            }
+            catch (Exception ex) {
+                return BrokerOperationResult.Fail($"Failed to update broker environment: {ex.Message}");
+            }
         }
     }
 

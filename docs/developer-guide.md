@@ -76,11 +76,13 @@ dotnet run --project src/PipeMux.CLI -c Debug -- :ps
 dotnet run --project src/PipeMux.CLI -c Debug -- :stop calculator
 dotnet run --project src/PipeMux.CLI -c Debug -- :restart calculator
 dotnet run --project src/PipeMux.CLI -c Debug -- :reload
+dotnet run --project src/PipeMux.CLI -c Debug -- :copy-env-to-broker DEEPSEEK_API_KEY
 dotnet run --project src/PipeMux.CLI -c Debug -- :help
 ```
 
 注意：`:restart` 只重启当前运行中的实例；如果 app 已注册但当前没有运行实例，它会返回失败，而不是隐式启动一个默认实例。
 注意：`:reload` 会重新读取 `broker.toml` 的 app 配置、更新内存视图并重建 watcher；如果你改的是 `[broker]` 的 `socket_path` / `pipe_name`，当前 broker 监听端点不会热切换，仍要完整重启 broker 进程。
+注意：如果你在调试由 broker 拉起的 Host app，需要把当前 shell 里的 API key 同步到 user service，可执行 `dotnet run --project src/PipeMux.CLI -c Debug -- :copy-env-to-broker DEEPSEEK_API_KEY`，然后按返回提示重启 broker。
 
 ## 5. 调试由 PipeMux.Host 托管的 DLL
 

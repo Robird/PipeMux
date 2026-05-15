@@ -66,6 +66,7 @@ pmux counter get      # Counter: 2
 | 停掉某个 app 的所有实例 | `pmux :stop <name>` |
 | 重启某个 app 当前正在运行的实例 | `pmux :restart <name>` |
 | 重新读取手工编辑后的 `broker.toml` | `pmux :reload` |
+| 把当前 shell 的环境变量同步到 broker | `pmux :copy-env-to-broker DEEPSEEK_API_KEY` |
 | 注销 app（可选同时 `--stop`） | `pmux :unregister <name> --stop` |
 | 看完整命令清单 | `pmux :help` |
 
@@ -74,6 +75,8 @@ pmux counter get      # Counter: 2
 注意：`pmux :restart <name>` 只会重启“当前已经在跑”的实例；如果 app 已注册但现在没在跑，它会失败，而不会顺手帮你启动一个默认实例。
 
 注意：`pmux :reload` 会重新读取 `broker.toml` 的 app 配置并重建相关 watcher，但不会把当前 broker 的监听 socket/pipe 热切换到新的 `[broker]` 设置；如果你改了 `socket_path` / `pipe_name`，仍需要完整重启 broker。
+
+注意：`pmux :copy-env-to-broker` 读取的是“当前 CLI 进程环境”，不是 `~/.bashrc` 文件本身。执行后还需要按提示重启 broker，后续由 broker 拉起的 app 才会继承这些变量。
 
 ## 4. 多终端隔离
 
@@ -98,6 +101,7 @@ pmux counter get
 | Broker 起不来 / 不响应 | `journalctl --user -u pipemux-broker -n 100` 看错误 |
 | 提示 app 未注册 | `pmux :list` 确认；必要时 `pmux :register ...` |
 | 手工改了 `broker.toml` 但 broker 没反应 | 先执行 `pmux :reload`；如果改的是 `[broker]` 端点设置，则改用 `systemctl --user restart pipemux-broker` |
+| app 拿不到 `DEEPSEEK_API_KEY` 之类的环境变量 | 在当前 shell 里设好变量后执行 `pmux :copy-env-to-broker DEEPSEEK_API_KEY`，再按提示重启 broker |
 | 改了 DLL 代码但行为没变 | 先看 `pmux :list` / `pmux :ps` 是否提示程序集晚于进程；若 app 正在运行，用 `pmux :restart <app>` 立即重载，或 `pmux :stop <app>` 后等待下次调用再冷启动 |
 | `:register` 报 "App already registered" | 错误消息已经给了下一步命令，按提示走 |
 | 想完全重置 broker 状态 | `systemctl --user restart pipemux-broker` |

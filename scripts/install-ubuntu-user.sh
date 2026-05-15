@@ -230,6 +230,15 @@ install_service_file() {
     echo "Installed user service: $target_service"
 }
 
+install_service_dropin() {
+    local source_dropin_dir="$REPO_ROOT/deploy/systemd/user/$SERVICE_NAME.d"
+    local target_dropin_dir="$SYSTEMD_USER_DIR/$SERVICE_NAME.d"
+
+    mkdir -p "$target_dropin_dir"
+    cp "$source_dropin_dir/10-environment.conf" "$target_dropin_dir/10-environment.conf"
+    echo "Installed user service drop-in: $target_dropin_dir/10-environment.conf"
+}
+
 mkdir -p "$INSTALL_ROOT/bin/broker" "$INSTALL_ROOT/bin/cli" "$INSTALL_ROOT/bin/host"
 mkdir -p "$BIN_DIR" "$CONFIG_DIR" "$SYSTEMD_USER_DIR"
 
@@ -252,6 +261,7 @@ write_wrapper "$BIN_DIR/pmux-host" "$INSTALL_ROOT/bin/host/PipeMux.Host"
 
 write_default_config_if_missing
 install_service_file
+install_service_dropin
 
 if [[ "$SKIP_SYSTEMD" -eq 0 ]]; then
     echo "Reloading user systemd daemon..."

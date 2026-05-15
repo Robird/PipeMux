@@ -12,6 +12,8 @@ if (args.Length > 0 && ManagementCommand.IsManagementCommand(args[0])) {
         Console.Error.WriteLine("Use 'pmux :help' for available commands");
         return 1;
     }
+
+    command = EnrichManagementCommand(command);
     
     var client = new BrokerClient();
     var result = await client.SendManagementCommandAsync(command);
@@ -54,3 +56,33 @@ rootCommand.SetAction(async (ParseResult parseResult, CancellationToken ct) => {
 });
 
 return await rootCommand.Parse(args).InvokeAsync();
+
+static ManagementCommand EnrichManagementCommand(ManagementCommand command) {
+    if (command.Kind != ManagementCommandKind.CopyEnvToBroker) {
+        return command;
+    }
+
+    var names = command.EnvironmentVariableNames
+        .Where(name => !string.IsNullOrWhiteSpace(name))
+        .Distinct(StringComparer.Ordinal)
+        .ToArray();
+
+    var values = new Dictionary<string, string>(StringComparer.Ordinal);
+    foreach (var name in names) {
+        var value = Environment.GetEnvironmentVariable(name);
+        if (value != null) {
+            values[name] = value;
+        }
+    }
+
+    return new ManagementCommand {
+        Kind = command.Kind,
+        TargetApp = command.TargetApp,
+        HostPath = command.HostPath,
+        TargetAssemblyPath = command.TargetAssemblyPath,
+        TargetMethodName = command.TargetMethodName,
+        Flag = command.Flag,
+        EnvironmentVariableNames = names,
+        EnvironmentVariableValues = values
+    };
+}

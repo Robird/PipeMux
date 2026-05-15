@@ -7,6 +7,8 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEST_HOME="$(mktemp -d /tmp/pipemux-mgmt-e2e-XXXXXX)"
 LOG_FILE="$TEST_HOME/broker.log"
 CONFIG_PATH="$TEST_HOME/.config/pipemux/broker.toml"
+BROKER_ENV_PATH="$TEST_HOME/.config/pipemux/broker.env"
+BROKER_DROPIN_PATH="$TEST_HOME/.config/systemd/user/pipemux-broker.service.d/10-environment.conf"
 SOCKET_PATH="$TEST_HOME/broker.sock"
 BROKER_PID=""
 ORIGINAL_PATH="$PATH"
@@ -142,8 +144,42 @@ assert_contains "$help_output" "First-time setup:" ":help onboarding header"
 assert_contains "$help_output" "[apps.counter]" ":help config snippet"
 assert_contains "$help_output" "pmux :register counter /absolute/path/to/MyApp.dll" ":help register example"
 assert_contains "$help_output" ":reload" ":help reload command"
+assert_contains "$help_output" ":copy-env-to-broker" ":help copy-env-to-broker command"
 
 echo "✅ Empty-state onboarding is present"
+echo ""
+
+echo "[2.7/11] Verifying broker environment copy command..."
+export DEEPSEEK_API_KEY="e2e-deepseek-key"
+copy_env_output="$(run_cli :copy-env-to-broker DEEPSEEK_API_KEY MISSING_KEY)"
+assert_contains "$copy_env_output" "Copied 1 environment variable(s) to broker environment: DEEPSEEK_API_KEY" ":copy-env-to-broker copied variables"
+assert_contains "$copy_env_output" "Environment file: $BROKER_ENV_PATH" ":copy-env-to-broker env file path"
+assert_contains "$copy_env_output" "Missing in current CLI environment: MISSING_KEY" ":copy-env-to-broker missing variable hint"
+assert_contains "$copy_env_output" "Systemd drop-in created: $BROKER_DROPIN_PATH" ":copy-env-to-broker drop-in path"
+assert_contains "$copy_env_output" "systemctl --user daemon-reload && systemctl --user restart pipemux-broker" ":copy-env-to-broker restart hint"
+
+if [[ ! -f "$BROKER_ENV_PATH" ]]; then
+    fail "broker.env was not created by :copy-env-to-broker"
+fi
+
+if [[ ! -f "$BROKER_DROPIN_PATH" ]]; then
+    fail "systemd drop-in was not created by :copy-env-to-broker"
+fi
+
+if ! grep -Fq 'DEEPSEEK_API_KEY="e2e-deepseek-key"' "$BROKER_ENV_PATH"; then
+    fail "broker.env did not persist the copied environment variable"
+fi
+
+broker_env_mode="$(stat -c %a "$BROKER_ENV_PATH")"
+if [[ "$broker_env_mode" != "600" ]]; then
+    fail "broker.env permissions were $broker_env_mode instead of 600"
+fi
+
+if ! grep -Fq 'EnvironmentFile=-%h/.config/pipemux/broker.env' "$BROKER_DROPIN_PATH"; then
+    fail "systemd drop-in did not point to broker.env"
+fi
+
+echo "✅ Broker environment copy command persisted broker.env and drop-in"
 echo ""
 
 echo "[3/11] Registering PipeMux.Host-managed app without --host-path..."

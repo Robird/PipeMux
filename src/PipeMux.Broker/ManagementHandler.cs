@@ -31,6 +31,7 @@ public sealed class ManagementHandler {
             ManagementCommandKind.Reload => HandleReloadAsync(request),
             ManagementCommandKind.Register => HandleRegisterAsync(request, command),
             ManagementCommandKind.Unregister => HandleUnregisterAsync(request, command),
+            ManagementCommandKind.CopyEnvToBroker => HandleCopyEnvToBrokerAsync(request, command),
             ManagementCommandKind.Help => HandleHelpAsync(request),
             _ => Task.FromResult(Response.Fail(request.RequestId, $"Unknown command: {command.Kind}"))
         };
@@ -249,6 +250,26 @@ public sealed class ManagementHandler {
         return Task.FromResult(CreateOperationResponse(request.RequestId, _coordinator.UnregisterApp(appName, command.Flag)));
     }
 
+    private Task<Response> HandleCopyEnvToBrokerAsync(Request request, ManagementCommand command) {
+        if (command.EnvironmentVariableNames.Length == 0) {
+            return Task.FromResult(Response.Fail(
+                request.RequestId,
+                """
+                Usage: pmux :copy-env-to-broker <ENV_VAR> [ENV_VAR...]
+                Example:
+                  pmux :copy-env-to-broker DEEPSEEK_API_KEY OPENAI_API_KEY
+                Tip:
+                  Values are read from the current CLI environment and written to broker.env.
+                """.TrimEnd()));
+        }
+
+        return Task.FromResult(CreateOperationResponse(
+            request.RequestId,
+            _coordinator.CopyEnvironmentToBroker(
+                command.EnvironmentVariableNames,
+                command.EnvironmentVariableValues)));
+    }
+
     private static Response CreateOperationResponse(string requestId, BrokerOperationResult result) {
         return result.Success
             ? Response.Ok(requestId, result.Message)
@@ -271,6 +292,8 @@ public sealed class ManagementHandler {
         sb.AppendLine("                 Register an app hosted by PipeMux.Host");
         sb.AppendLine("  :unregister <app> [--stop]");
         sb.AppendLine("                 Remove app from config (optionally stop running instances)");
+        sb.AppendLine("  :copy-env-to-broker <ENV_VAR> [ENV_VAR...]");
+        sb.AppendLine("                 Copy current CLI environment variables into broker.env");
         sb.AppendLine("  :help          Show this help message");
         sb.AppendLine();
         AppendFirstTimeSetup(sb);

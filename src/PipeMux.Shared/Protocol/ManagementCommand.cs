@@ -18,6 +18,8 @@ public enum ManagementCommandKind {
     Register,
     /// <summary>移除已注册应用并写入配置</summary>
     Unregister,
+    /// <summary>复制当前 CLI 环境变量到 broker 的 EnvironmentFile</summary>
+    CopyEnvToBroker,
     /// <summary>显示帮助信息</summary>
     Help
 }
@@ -55,6 +57,17 @@ public sealed class ManagementCommand {
     /// 通用布尔开关（当前用于 unregister --stop）
     /// </summary>
     public bool Flag { get; init; }
+
+    /// <summary>
+    /// copy-env-to-broker 请求的环境变量名（按 CLI 输入顺序）
+    /// </summary>
+    public string[] EnvironmentVariableNames { get; init; } = [];
+
+    /// <summary>
+    /// 由 CLI 从本地进程环境读取后填充的变量值。
+    /// 未出现的变量表示在当前 CLI 环境中不存在。
+    /// </summary>
+    public Dictionary<string, string>? EnvironmentVariableValues { get; init; }
 
     /// <summary>
     /// 从命令字符串解析管理命令
@@ -113,6 +126,13 @@ public sealed class ManagementCommand {
                 Kind = ManagementCommandKind.Unregister,
                 TargetApp = targetApp,
                 Flag = options.ContainsKey("--stop"),
+            };
+        }
+
+        if (command == "copy-env-to-broker") {
+            return new ManagementCommand {
+                Kind = ManagementCommandKind.CopyEnvToBroker,
+                EnvironmentVariableNames = positional.ToArray()
             };
         }
 
