@@ -326,6 +326,7 @@ if final_invoke_output="$(run_cli counter inc 2>&1)"; then
     fail "invoke after unregister should have failed"
 fi
 assert_contains "$final_invoke_output" "Unknown app: counter" "invoke after unregister"
+assert_contains "$final_invoke_output" "Run \`pmux :list\` to see registered apps." "unknown app hint"
 
 echo "✅ Final state is clean"
 echo ""

@@ -151,9 +151,10 @@ run_cli_once() {
 
     if "$exec_path" "\$@" >"\$stdout_file" 2>"\$stderr_file"; then
         return 0
+    else
+        local status=\$?
+        return "\$status"
     fi
-
-    return \$?
 }
 
 run_cli_with_recovery() {

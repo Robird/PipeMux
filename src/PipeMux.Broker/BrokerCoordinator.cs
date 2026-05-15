@@ -187,7 +187,9 @@ public sealed class BrokerCoordinator {
         }
 
         if (!_configStore.Apps.TryGetValue(appName, out var configuredSettings)) {
-            return ProcessAcquisitionResult.Fail(Response.Fail(requestId, $"Unknown app: {appName}"));
+            return ProcessAcquisitionResult.Fail(Response.Fail(
+                requestId,
+                $"Unknown app: {appName}\nRun `pmux :list` to see registered apps."));
         }
 
         var processKey = ProcessInstanceKey.Build(appName, terminalId);
