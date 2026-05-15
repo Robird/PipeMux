@@ -52,7 +52,9 @@ internal static class BrokerConfigTomlCodec {
         foreach (var (name, settings) in apps) {
             snapshot[name] = new AppSettings {
                 Command = settings.Command,
+                AssemblyPath = settings.AssemblyPath,
                 AutoStart = settings.AutoStart,
+                AutoRestart = settings.AutoRestart,
                 Timeout = settings.Timeout
             };
         }

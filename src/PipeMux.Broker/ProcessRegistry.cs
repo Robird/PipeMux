@@ -83,6 +83,7 @@ public sealed class AppProcess : IDisposable {
     public string AppName { get; }
     public bool HasExited => _process.HasExited;
     public int ProcessId => _process.Id;
+    public DateTime StartTime { get; private set; }
 
     public AppProcess(string appName, string command) {
         AppName = appName;
@@ -113,6 +114,7 @@ public sealed class AppProcess : IDisposable {
 
     public void Start() {
         _process.Start();
+        StartTime = _process.StartTime;
         Console.Error.WriteLine($"[INFO] Process started: {AppName}, PID: {_process.Id}");
         
         // 消费 StandardError 防止死锁

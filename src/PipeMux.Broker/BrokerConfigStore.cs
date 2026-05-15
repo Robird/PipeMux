@@ -63,7 +63,9 @@ public sealed class BrokerConfigStore {
     internal static AppSettings CloneAppSettings(AppSettings settings) {
         return new AppSettings {
             Command = settings.Command,
+            AssemblyPath = settings.AssemblyPath,
             AutoStart = settings.AutoStart,
+            AutoRestart = settings.AutoRestart,
             Timeout = settings.Timeout
         };
     }

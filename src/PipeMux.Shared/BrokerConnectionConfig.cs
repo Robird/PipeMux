@@ -20,6 +20,8 @@ public sealed class BrokerConnectionSettings {
 /// </summary>
 public sealed class BrokerConnectionAppSettings {
     public string? Command { get; set; }
+    public string? AssemblyPath { get; set; }
     public bool AutoStart { get; set; }
+    public bool AutoRestart { get; set; }
     public int Timeout { get; set; } = 30;
 }

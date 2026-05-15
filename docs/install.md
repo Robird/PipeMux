@@ -57,11 +57,21 @@ timeout = 30
 
 [apps.counter]
 command = "/absolute/path/to/PipeMux.Host /path/to/HostDemo.dll HostDemo.DebugEntries.BuildCounter"
+assembly_path = "/path/to/HostDemo.dll"
 auto_start = false
+auto_restart = false
 timeout = 30
 ```
 
 对 `broker.toml` 里的 `command`，推荐直接写 `PipeMux.Host` 的绝对路径。原因是 broker 常常由 `systemd --user` 拉起，它继承到的 PATH 可能不包含 `~/.local/bin`；而 `pmux :register` 会自动解析并保存一个 broker 实际可执行到的绝对路径。
+
+对于 Host 托管的 DLL，`assembly_path` 也是正式字段。Broker 用它做：
+
+- `auto_restart` 文件监视
+- `pmux :list` / `pmux :ps` 的程序集信息展示
+- “DLL 已更新但后台进程还没重载”的 stale 检查
+
+当前实现不再从 `command` 反推程序集路径；如果你是手写 `broker.toml`，请把 `command` 和 `assembly_path` 一起维护。
 
 如需临时覆盖连接方式，可设置环境变量：
 
@@ -111,6 +121,7 @@ journalctl --user -u pipemux-broker -f
 ```bash
 pmux :list
 pmux :ps
+pmux :restart calculator
 pmux calculator push 10
 ```
 
@@ -133,7 +144,9 @@ export PATH="$HOME/.local/bin:$PATH"
 ```toml
 [apps.greeter]
 command = "/absolute/path/to/PipeMux.Host /opt/myapps/HostDemo.dll HostDemo.DebugEntries.BuildGreeter"
+assembly_path = "/opt/myapps/HostDemo.dll"
 auto_start = false
+auto_restart = false
 timeout = 30
 ```
 
@@ -156,6 +169,14 @@ pmux calculator push 20
 pmux counter inc
 pmux counter get
 ```
+
+如果你刚替换了某个 DLL，而对应 app 现在正在运行，可以用：
+
+```bash
+pmux :restart counter
+```
+
+注意：`:restart` 只重启当前正在运行的实例；如果 app 已注册但当前没有运行实例，它会失败，而不会隐式帮你启动一个默认实例。
 
 如果你是在脚本、CI 或其他非交互环境里调用 CLI，建议显式指定终端标识，避免每次命中不同会话：
 

@@ -50,11 +50,61 @@ public sealed class ManagementHandler {
             AppendFirstTimeSetup(sb);
         }
         else {
-            foreach (var (name, settings) in apps) {
-                var autoStart = settings.AutoStart ? " [auto-start]" : "";
-                sb.AppendLine($"  {name}{autoStart}");
+            foreach (var status in _coordinator.SnapshotRegisteredAppStatuses()) {
+                var name = status.AppName;
+                var settings = status.Settings;
+                var tags = new List<string>();
+                if (settings.AutoStart) tags.Add("auto-start");
+                if (settings.AutoRestart) tags.Add("auto-restart");
+                var tagStr = tags.Count > 0 ? $" [{string.Join(", ", tags)}]" : "";
+
+                sb.AppendLine($"  {name}{tagStr}");
                 sb.AppendLine($"    Command: {settings.Command}");
                 sb.AppendLine($"    Timeout: {settings.Timeout}s");
+
+                // 显示程序集文件信息
+                var assemblyInfo = status.Assembly;
+                if (assemblyInfo != null) {
+                    if (assemblyInfo.Exists && assemblyInfo.LastWriteTimeUtc.HasValue) {
+                        var age = FormatDuration(DateTime.UtcNow - assemblyInfo.LastWriteTimeUtc.Value);
+                        sb.AppendLine($"    Assembly: {assemblyInfo.Path} (modified {age} ago)");
+                    }
+                    else if (assemblyInfo.Path != null) {
+                        sb.AppendLine($"    Assembly: {assemblyInfo.Path} (file not found)");
+                    }
+                }
+
+                // 显示运行状态与一致性检查
+                if (status.Processes.Count > 0) {
+                    var processes = status.Processes;
+                    if (processes.Count == 1) {
+                        var process = processes[0];
+                        var uptime = FormatDuration(DateTime.UtcNow - process.ProcessStartTimeUtc);
+                        var health = process.IsHealthy ? "healthy" : "unhealthy";
+                        sb.Append($"    Status: running (PID: {process.ProcessId}, uptime: {uptime}, {health})");
+                    }
+                    else {
+                        var oldestStart = processes.Min(p => p.ProcessStartTimeUtc);
+                        var uptime = FormatDuration(DateTime.UtcNow - oldestStart);
+                        var healthyCount = processes.Count(p => p.IsHealthy);
+                        var unhealthyCount = processes.Count - healthyCount;
+                        var healthSummary = unhealthyCount == 0
+                            ? $"{healthyCount} healthy"
+                            : $"{healthyCount} healthy, {unhealthyCount} unhealthy";
+                        sb.Append($"    Status: running ({processes.Count} instances, oldest uptime: {uptime}, {healthSummary})");
+                    }
+
+                    if (status.AssemblyModifiedAfterStart) {
+                        sb.AppendLine();
+                        sb.AppendLine($"    *** Assembly was modified after one or more process instances started. Run `pmux :restart {name}` to load changes. ***");
+                    }
+                    else {
+                        sb.AppendLine();
+                    }
+                }
+                else {
+                    sb.AppendLine("    Status: not running");
+                }
             }
         }
 
@@ -77,14 +127,42 @@ public sealed class ManagementHandler {
             sb.AppendLine("  Run 'pmux :list' to inspect registered apps.");
         }
         else {
-            foreach (var process in activeProcesses) {
+            foreach (var status in _coordinator.SnapshotRunningProcessStatuses()) {
+                var process = status.Process;
                 var health = process.IsHealthy ? "healthy" : "unhealthy";
+                var uptime = FormatDuration(DateTime.UtcNow - process.ProcessStartTimeUtc);
                 sb.AppendLine($"  {process.Key}");
-                sb.AppendLine($"    PID: {process.ProcessId}, Status: {health}");
+                sb.AppendLine($"    PID: {process.ProcessId}, Status: {health}, Uptime: {uptime}");
+
+                // 获取对应 app 的程序集信息进行一致性检查
+                var appName = process.AppName;
+                var assemblyInfo = status.Assembly;
+                if (assemblyInfo is { Exists: true, LastWriteTimeUtc: not null }) {
+                    var age = FormatDuration(DateTime.UtcNow - assemblyInfo.LastWriteTimeUtc.Value);
+                    sb.Append($"    Assembly: {assemblyInfo.Path} (modified {age} ago)");
+
+                    if (status.AssemblyModifiedAfterStart) {
+                        sb.AppendLine();
+                        sb.AppendLine($"    *** Assembly was modified after process start. Run `pmux :restart {appName}` to load changes. ***");
+                    }
+                    else {
+                        sb.AppendLine();
+                    }
+                }
             }
         }
 
         return Task.FromResult(Response.Ok(request.RequestId, sb.ToString().TrimEnd()));
+    }
+
+    /// <summary>
+    /// 将 TimeSpan 格式化为人类可读的时长字符串。
+    /// </summary>
+    private static string FormatDuration(TimeSpan duration) {
+        if (duration.TotalSeconds < 60) return $"{(int)duration.TotalSeconds}s";
+        if (duration.TotalMinutes < 60) return $"{(int)duration.TotalMinutes}m {duration.Seconds}s";
+        if (duration.TotalHours < 24) return $"{(int)duration.TotalHours}h {duration.Minutes}m";
+        return $"{(int)duration.TotalDays}d {duration.Hours}h";
     }
 
     /// <summary>
@@ -107,10 +185,22 @@ public sealed class ManagementHandler {
     }
 
     /// <summary>
-    /// :restart - 重启指定应用 (P2 - 暂未实现)
+    /// :restart - 重启指定应用
     /// </summary>
     private Task<Response> HandleRestartAsync(Request request, string? targetApp) {
-        return Task.FromResult(Response.Fail(request.RequestId, ":restart command is not yet implemented (P2)"));
+        if (string.IsNullOrEmpty(targetApp)) {
+            return Task.FromResult(Response.Fail(
+                request.RequestId,
+                """
+                Usage: pmux :restart <app-name>
+                Example:
+                  pmux :restart counter
+                Tip:
+                  Run 'pmux :list' to see registered apps first.
+                """.TrimEnd()));
+        }
+
+        return Task.FromResult(CreateOperationResponse(request.RequestId, _coordinator.RestartRunningInstances(targetApp)));
     }
 
     /// <summary>
@@ -167,6 +257,7 @@ public sealed class ManagementHandler {
         sb.AppendLine("  :list          List registered apps");
         sb.AppendLine("  :ps            List running processes");
         sb.AppendLine("  :stop <app>    Stop processes for an application");
+        sb.AppendLine("  :restart <app> Restart running instances for an application");
         sb.AppendLine("  :register <app> <assembly> <entry> [--host-path <pmux-host-path>]");
         sb.AppendLine("                 Register an app hosted by PipeMux.Host");
         sb.AppendLine("  :unregister <app> [--stop]");
@@ -197,6 +288,7 @@ public sealed class ManagementHandler {
         sb.AppendLine();
         sb.AppendLine("     [apps.counter]");
         sb.AppendLine($"     command = \"{GetConfigCommandExample(hostResolution.SuggestedConfigCommandHost)}\"");
+        sb.AppendLine("     assembly_path = \"/absolute/path/to/MyApp.dll\"");
         sb.AppendLine("     auto_start = false");
         sb.AppendLine("     timeout = 30");
         sb.AppendLine();

@@ -45,6 +45,9 @@ public sealed class BrokerServer {
             }
         }
 
+        // 启动文件监视（auto_restart 开启的 app）
+        _coordinator.StartAutoRestartWatchers();
+
         try {
             var endpoint = BrokerConnectionResolver.ResolveServerEndpoint(_brokerSettings);
             switch (endpoint.Transport) {
@@ -64,6 +67,8 @@ public sealed class BrokerServer {
             Console.Error.WriteLine("[INFO] Broker shutting down...");
         }
         finally {
+            _coordinator.StopAllWatchers();
+
             // P0 Fix: Wait for all client tasks to complete before shutdown
             Console.Error.WriteLine("[INFO] Waiting for client tasks to complete...");
             Task[] tasksToWait;

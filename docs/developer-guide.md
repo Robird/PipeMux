@@ -31,6 +31,13 @@ socket_path = "~/.local/share/pipemux/broker.sock"
 command = "dotnet run --project /path/to/PipeMux/samples/Calculator -c Debug"
 auto_start = false
 timeout = 30
+
+[apps.counter]
+command = "/path/to/PipeMux/src/PipeMux.Host/bin/Debug/net10.0/PipeMux.Host /path/to/PipeMux/samples/HostDemo/bin/Debug/net10.0/HostDemo.dll HostDemo.DebugEntries.BuildCounter"
+assembly_path = "/path/to/PipeMux/samples/HostDemo/bin/Debug/net10.0/HostDemo.dll"
+auto_start = false
+auto_restart = false
+timeout = 30
 ```
 
 Windows 下可改用：
@@ -48,6 +55,8 @@ dotnet run --project src/PipeMux.Broker -c Debug
 
 Broker 会读取 `~/.config/pipemux/broker.toml`，并在首次请求某个 app 时按配置启动对应进程。
 
+对于需要 DLL 监视、stale-check 和 `auto_restart` 的 app，`assembly_path` 是正式配置字段。当前实现不再从 `command` 反推主程序集路径。
+
 ## 4. 调用 CLI
 
 另开一个终端：
@@ -64,8 +73,11 @@ dotnet run --project src/PipeMux.CLI -c Debug -- :ps
 
 ```bash
 dotnet run --project src/PipeMux.CLI -c Debug -- :stop calculator
+dotnet run --project src/PipeMux.CLI -c Debug -- :restart calculator
 dotnet run --project src/PipeMux.CLI -c Debug -- :help
 ```
+
+注意：`:restart` 只重启当前运行中的实例；如果 app 已注册但当前没有运行实例，它会返回失败，而不是隐式启动一个默认实例。
 
 ## 5. 调试由 PipeMux.Host 托管的 DLL
 
@@ -88,6 +100,19 @@ dotnet run --project src/PipeMux.CLI -c Debug -- :unregister counter --stop
 ```
 
 这条命令链适合调试“Host 是否正确找到 DLL / 入口方法 / 依赖”的问题。安装工作流下通常不需要传 `--host-path`，因为 broker 会自动解析安装目录里的 `PipeMux.Host`；如果你的环境是自定义布局，也可以依赖 PATH 里的 `pmux-host`。
+
+如果你直接手改 `broker.toml` 来调试 Host 场景，记得同步维护：
+
+```toml
+[apps.counter]
+command = "/path/to/PipeMux/src/PipeMux.Host/bin/Debug/net10.0/PipeMux.Host /path/to/PipeMux/samples/HostDemo/bin/Debug/net10.0/HostDemo.dll HostDemo.DebugEntries.BuildCounter"
+assembly_path = "/path/to/PipeMux/samples/HostDemo/bin/Debug/net10.0/HostDemo.dll"
+auto_start = false
+auto_restart = true
+timeout = 30
+```
+
+`auto_restart = true` 时，Broker 只监视 `assembly_path` 指向的文件；如果当前没有运行实例，则只会在 `auto_start = true` 时补起默认实例。
 
 ## 6. 终端隔离调试
 

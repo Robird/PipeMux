@@ -25,11 +25,15 @@ timeout = 30
 # `PipeMux.Host` 绝对路径；`:register` 也会自动帮你解析并保存绝对路径：
 # [apps.counter]
 # command = "/absolute/path/to/PipeMux.Host /absolute/path/to/MyLib.dll MyNamespace.DebugEntries.BuildCounter"
+# assembly_path = "/absolute/path/to/MyLib.dll"
 # auto_start = false
+# auto_restart = false
 # timeout = 30
 
 # 源码调试 `samples/HostDemo` 时，也可以显式指向仓库里的 Debug 产物：
 # [apps.counter]
 # command = "/path/to/PipeMux/src/PipeMux.Host/bin/Debug/net10.0/PipeMux.Host /path/to/PipeMux/samples/HostDemo/bin/Debug/net10.0/HostDemo.dll HostDemo.DebugEntries.BuildCounter"
+# assembly_path = "/path/to/PipeMux/samples/HostDemo/bin/Debug/net10.0/HostDemo.dll"
 # auto_start = false
+# auto_restart = true
 # timeout = 30

@@ -61,6 +61,11 @@ Broker and Front of Stateful CLI Apps —— 通过 Named Pipe / Unix Domain Soc
 ### Launcher
 - `:register` 当前**只承诺** `PipeMux.Host` 主路径（必填 `app / assembly / entry`，可选 `--host-path`）；复杂启动命令让用户手改 `broker.toml`。
 - `AppSettings.Command` 仍是字符串 launcher（argv 由 `CommandLineParser` 解析，支持基本引号/转义）。引入结构化 launcher 的触发阈值见下文"演进触发阈值"。
+- `AppSettings.AssemblyPath` 是 **watcher / stale-check 的唯一真相**；不要再从 `Command` 反推主程序集路径。
+
+### Restart 语义
+- `:restart` 只重启**当前运行中的实例集合**；app 已注册但未运行时应失败，不负责隐式拉起默认实例。
+- `auto_restart` 的“无运行实例”分支仅由 broker 内部策略处理：`AutoStart=true` 时才补起默认实例。
 
 ### CLI 退出码
 - 普通 app 调用路径在 `SetAction` 内基于 broker 响应直接 `return 0/1`（System.CommandLine 2.0+ 的退出码契约）。
@@ -86,6 +91,11 @@ Broker and Front of Stateful CLI Apps —— 通过 Named Pipe / Unix Domain Soc
 
 ## 最新进展（最多保留 3 条）
 
+### 2026-05-15 — `AssemblyPath` 显式化 + restart/状态读路径收敛 ✅
+- `AppSettings.AssemblyPath` 升格为正式配置字段；`auto_restart`、`:list`、`:ps` 的程序集信息与 stale 判断**只**读它，不再从 `Command` 反推。
+- `:restart` 语义收紧为“只重启当前运行中的实例”；不再对已注册但未运行的 app 隐式 `start`。`auto_restart` 的“当前无实例”分支则仅在 `AutoStart=true` 时补起默认实例。
+- `ManagementHandler` 不再自己聚合进程/程序集状态；结构化快照与 process key 解析下沉到 `BrokerCoordinator` / `ProcessInstanceKey`，`WatchDebounceMs` 配置面删除，防抖收敛为 broker 内部常量。
+
 ### 2026-04-22 — `:register` 自动定位 pmux-host + re-register 引导 ✅
 - `HostRegistrationRequest` 在用户未传 `--host-path` 时按 `<broker_dir>/../host/PipeMux.Host` → PATH 中 `pmux-host` 的顺序探测，找到即用绝对路径写入 broker.toml。**这同时解决了"systemd user service 默认 PATH 不含 ~/.local/bin"的运行期解析问题**——broker.toml 里就是绝对路径，子进程启动不再依赖 PATH。
 - `BrokerCoordinator.RegisterApp` 对"app 已存在"的拒绝消息升级为两条可执行引导：`pmux :stop <app>`（仅重建 DLL）vs `pmux :unregister <app> --stop`（要换 assembly/entry）。
@@ -98,7 +108,3 @@ Broker and Front of Stateful CLI Apps —— 通过 Named Pipe / Unix Domain Soc
 - 按 [beta5+ migration guide](https://learn.microsoft.com/en-us/dotnet/standard/commandline/migration-guide-2.0.0-beta5) 完成 API 迁移：`SetHandler/InvocationContext/AddArgument` → `SetAction/ParseResult/Arguments.Add`；`CommandLineConfiguration` → `InvocationConfiguration`；`parseResult.Configuration.Output` → `parseResult.InvocationConfiguration.Output`。
 - 验证：`dotnet build PipeMux.sln` 0w/0e；parser 与 E2E 两个测试脚本均通过。
 - API 模式已沉淀到上节"关键库 API 模式备忘"。
-
-### 2026-04-21 — AGENTS.md 重写 ✅
-- 按"外部记忆方法论"压缩 AGENTS.md：从 ~600 行降到 ~110 行；删除已落地实现明细、暂不做的方案分析、逐次审阅日志、指向不存在文件的核对说明。
-- 旧版本归档为 `AGENTS.md.bak`，可在需要追溯历史决策时查阅。

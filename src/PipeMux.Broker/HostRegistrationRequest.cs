@@ -93,6 +93,7 @@ public sealed class HostRegistrationRequest {
             AppName = command.TargetApp,
             Settings = new AppSettings {
                 Command = BuildHostCommand(normalizedHostPath, normalizedAssemblyPath, command.TargetMethodName),
+                AssemblyPath = normalizedAssemblyPath,
                 AutoStart = false,
                 Timeout = 30
             }

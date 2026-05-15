@@ -46,6 +46,15 @@ run_cli() {
     "$CLI_BIN" "$@"
 }
 
+run_cli_in_terminal() {
+    local terminal_id="$1"
+    shift
+    (
+        export PIPEMUX_TERMINAL_ID="$terminal_id"
+        "$CLI_BIN" "$@"
+    )
+}
+
 start_broker() {
     "$BROKER_BIN" >> "$LOG_FILE" 2>&1 &
     BROKER_PID=$!
@@ -88,7 +97,7 @@ echo "PipeMux Management Commands E2E Test"
 echo "======================================"
 echo ""
 
-echo "[1/8] Building required projects..."
+echo "[1/10] Building required projects..."
 cd "$ROOT_DIR"
 dotnet build PipeMux.sln --nologo > /dev/null
 echo "✅ Build successful"
@@ -111,14 +120,14 @@ chmod +x "$HOST_WRAPPER"
 export PATH="host-bin:$ORIGINAL_PATH"
 cd "$TEST_HOME"
 
-echo "[2/8] Starting isolated Broker..."
+echo "[2/10] Starting isolated Broker..."
 : > "$LOG_FILE"
 start_broker
 
 echo "✅ Broker started (PID: $BROKER_PID)"
 echo ""
 
-echo "[2.5/8] Verifying onboarding hints for empty state..."
+echo "[2.5/10] Verifying onboarding hints for empty state..."
 initial_list_output="$(run_cli :list)"
 assert_contains "$initial_list_output" "(no apps registered)" "initial :list empty state"
 assert_contains "$initial_list_output" "First-time setup:" "initial :list onboarding header"
@@ -126,6 +135,7 @@ assert_contains "$initial_list_output" "[apps.counter]" "initial :list config sn
 assert_contains "$initial_list_output" "MyNamespace.DebugEntries.BuildCounter" "initial :list entry hint"
 assert_contains "$initial_list_output" "pmux :register counter /absolute/path/to/MyApp.dll MyNamespace.DebugEntries.BuildCounter" "initial :list register hint"
 assert_contains "$initial_list_output" "command = \"pmux-host /absolute/path/to/MyApp.dll MyNamespace.DebugEntries.BuildCounter\"" "initial :list config hint"
+assert_contains "$initial_list_output" "assembly_path = \"/absolute/path/to/MyApp.dll\"" "initial :list assembly path hint"
 
 help_output="$(run_cli :help)"
 assert_contains "$help_output" "First-time setup:" ":help onboarding header"
@@ -135,7 +145,7 @@ assert_contains "$help_output" "pmux :register counter /absolute/path/to/MyApp.d
 echo "✅ Empty-state onboarding is present"
 echo ""
 
-echo "[3/8] Registering PipeMux.Host-managed app without --host-path..."
+echo "[3/10] Registering PipeMux.Host-managed app without --host-path..."
 register_output="$(run_cli :register counter "$HOST_DLL" HostDemo.DebugEntries.BuildCounter)"
 assert_contains "$register_output" "Registered app 'counter'" "register command"
 
@@ -151,6 +161,10 @@ if ! grep -Fq "$HOST_WRAPPER" "$CONFIG_PATH"; then
     fail "broker.toml did not persist the resolved absolute pmux-host path"
 fi
 
+if ! grep -Fq "assembly_path = \"$HOST_DLL\"" "$CONFIG_PATH"; then
+    fail "broker.toml did not persist assembly_path"
+fi
+
 if grep -Fq 'command = "pmux-host ' "$CONFIG_PATH"; then
     fail "broker.toml should not persist a bare pmux-host command after auto-resolution"
 fi
@@ -158,7 +172,7 @@ fi
 echo "✅ Register persisted to broker.toml"
 echo ""
 
-echo "[4/8] Verifying config reload after broker restart without PATH hint..."
+echo "[4/10] Verifying config reload after broker restart without PATH hint..."
 export PATH="$ORIGINAL_PATH"
 cd "$ROOT_DIR"
 stop_broker
@@ -175,7 +189,7 @@ fi
 echo "✅ Broker reloaded broker.toml after restart"
 echo ""
 
-echo "[5/8] Verifying list and invoke path..."
+echo "[5/10] Verifying list and invoke path..."
 list_output="$(run_cli :list)"
 assert_contains "$list_output" "counter" ":list after register"
 
@@ -187,7 +201,7 @@ fi
 echo "✅ Registered app listed and invoked successfully"
 echo ""
 
-echo "[5.5/8] Verifying re-register guidance when an instance is still running..."
+echo "[5.5/10] Verifying re-register guidance when an instance is still running..."
 if rereg_output="$(run_cli :register counter "$HOST_DLL" HostDemo.DebugEntries.BuildCounter 2>&1)"; then
     fail "re-register of an existing app should fail"
 fi
@@ -198,19 +212,82 @@ assert_contains "$rereg_output" "pmux :unregister counter --stop" "re-register u
 echo "✅ Re-register surfaces actionable guidance"
 echo ""
 
-echo "[6/8] Verifying unregister protection..."
+echo "[6/10] Verifying multi-terminal restart preserves isolated instances..."
+stop_output="$(run_cli :stop counter)"
+assert_contains "$stop_output" "Stopped:" ":stop before multi-terminal restart test"
+
+terminal_a_output="$(run_cli_in_terminal term-a counter inc)"
+if [[ "$terminal_a_output" != "Counter: 1" ]]; then
+    fail "terminal A initial invoke: expected 'Counter: 1', got '$terminal_a_output'"
+fi
+
+terminal_b_output="$(run_cli_in_terminal term-b counter inc)"
+if [[ "$terminal_b_output" != "Counter: 1" ]]; then
+    fail "terminal B initial invoke: expected 'Counter: 1', got '$terminal_b_output'"
+fi
+
+ps_before_restart="$(run_cli :ps)"
+assert_contains "$ps_before_restart" "counter:env:term-a" ":ps before restart should include terminal A"
+assert_contains "$ps_before_restart" "counter:env:term-b" ":ps before restart should include terminal B"
+
+restart_output="$(run_cli :restart counter)"
+assert_contains "$restart_output" "Restarted 2 processes for: counter" ":restart should preserve instance count"
+
+ps_after_restart="$(run_cli :ps)"
+assert_contains "$ps_after_restart" "counter:env:term-a" ":ps after restart should include terminal A"
+assert_contains "$ps_after_restart" "counter:env:term-b" ":ps after restart should include terminal B"
+
+terminal_a_after_restart="$(run_cli_in_terminal term-a counter inc)"
+if [[ "$terminal_a_after_restart" != "Counter: 1" ]]; then
+    fail "terminal A after restart: expected 'Counter: 1', got '$terminal_a_after_restart'"
+fi
+
+terminal_b_after_restart="$(run_cli_in_terminal term-b counter inc)"
+if [[ "$terminal_b_after_restart" != "Counter: 1" ]]; then
+    fail "terminal B after restart: expected 'Counter: 1', got '$terminal_b_after_restart'"
+fi
+
+echo "✅ Restart keeps per-terminal instances isolated"
+echo ""
+
+echo "[7/10] Verifying :restart does not implicitly start a stopped app..."
+stop_after_restart_test="$(run_cli :stop counter)"
+assert_contains "$stop_after_restart_test" "Stopped 2 processes for: counter" ":stop after restart test"
+
+if restart_stopped_output="$(run_cli :restart counter 2>&1)"; then
+    fail ":restart should fail when the app is registered but not running"
+fi
+assert_contains "$restart_stopped_output" "No running process found for: counter" ":restart stopped app failure"
+
+ps_after_failed_restart="$(run_cli :ps)"
+assert_contains "$ps_after_failed_restart" "(no running processes)" ":ps should stay empty after failed restart"
+
+echo "✅ Restart stays scoped to running instances"
+echo ""
+
+terminal_a_restarted="$(run_cli_in_terminal term-a counter inc)"
+if [[ "$terminal_a_restarted" != "Counter: 1" ]]; then
+    fail "terminal A after failed restart should cold-start: expected 'Counter: 1', got '$terminal_a_restarted'"
+fi
+
+terminal_b_restarted="$(run_cli_in_terminal term-b counter inc)"
+if [[ "$terminal_b_restarted" != "Counter: 1" ]]; then
+    fail "terminal B after failed restart should cold-start: expected 'Counter: 1', got '$terminal_b_restarted'"
+fi
+
+echo "[8/10] Verifying unregister protection..."
 if unregister_output="$(run_cli :unregister counter 2>&1)"; then
     fail ":unregister without --stop should have failed"
 fi
-assert_contains "$unregister_output" "has 1 running process(es)" "unregister protection"
+assert_contains "$unregister_output" "has 2 running process(es)" "unregister protection"
 
 echo "✅ Running process was protected from accidental unregister"
 echo ""
 
-echo "[7/8] Unregistering with --stop..."
+echo "[9/10] Unregistering with --stop..."
 unregister_stop_output="$(run_cli :unregister counter --stop)"
 assert_contains "$unregister_stop_output" "Unregistered app 'counter'" "unregister --stop"
-assert_contains "$unregister_stop_output" "stopped 1 process(es)" "unregister --stop count"
+assert_contains "$unregister_stop_output" "stopped 2 process(es)" "unregister --stop count"
 
 if grep -q "HostDemo.DebugEntries.BuildCounter" "$CONFIG_PATH"; then
     fail "broker.toml still contains the app after unregister"
@@ -219,7 +296,7 @@ fi
 echo "✅ App stopped and removed from broker.toml"
 echo ""
 
-echo "[8/8] Verifying post-unregister state..."
+echo "[10/10] Verifying post-unregister state..."
 final_list_output="$(run_cli :list)"
 assert_contains "$final_list_output" "(no apps registered)" "final :list"
 assert_contains "$final_list_output" "First-time setup:" "final :list onboarding header"

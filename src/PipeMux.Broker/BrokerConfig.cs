@@ -12,6 +12,8 @@ public sealed class BrokerConfig {
 
 public sealed class AppSettings {
     public required string Command { get; set; }
+    public string? AssemblyPath { get; set; }
     public bool AutoStart { get; set; }
+    public bool AutoRestart { get; set; }
     public int Timeout { get; set; } = 30; // 秒
 }
