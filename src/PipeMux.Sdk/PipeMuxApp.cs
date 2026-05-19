@@ -25,7 +25,11 @@ public class PipeMuxApp {
     public async Task RunAsync(RootCommand rootCommand, CancellationToken ct = default) {
         _rootCommand = rootCommand;
 
-        // 1. 设置 stdin/stdout 流
+        // 0. 防御：将托管 Console.Write* 重定向到 stderr，避免应用层日志污染 JSON-RPC 通道。
+        //    JSON-RPC 直接通过原始 OS stdout fd 通信，不受 Console.SetOut 影响。
+        Console.SetOut(Console.Error);
+
+        // 1. 获取原始 OS stdin/stdout fd，用于 JSON-RPC 通信
         using var stdin = Console.OpenStandardInput();
         using var stdout = Console.OpenStandardOutput();
 
